@@ -196,7 +196,7 @@ public class ArtifactRisksFiller {
         ArtifactInfo artifactInfo;
         try {
             artifactInfo = this._scaHttpClient.getArtifactInformation(artifactId.PackageType, artifactId.Name, artifactId.Version);
-            this._logger.debug(String.format("For CxSCA the artifact is identified by %s.", artifactInfo.getId().getIdentifier()));
+            this._logger.debug(String.format("For CxSCA the artifact is identified by %s.", artifactInfo.getId()));
         } catch (Exception var5) {
             if (var5 instanceof UnexpectedResponseCodeException && ((UnexpectedResponseCodeException) var5).StatusCode == 404) {
                 this._logger.error(String.format("Artifact not found, artifact name: %s. Exception Message: %s.", artifactId.Name, var5.getMessage()));
