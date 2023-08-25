@@ -14,7 +14,8 @@ public final class ConfigurationReader {
     public ConfigurationReader() {
     }
 
-    public static PluginConfiguration loadConfiguration(@Nonnull File pluginsDirectory, @Nonnull Logger logger) throws IOException {
+    public static PluginConfiguration loadConfiguration(@Nonnull File pluginsDirectory, @Nonnull Logger logger)
+            throws IOException {
         if (!pluginsDirectory.exists()) {
             throw new IOException(String.format("Directory '%s' not found", pluginsDirectory.getAbsolutePath()));
         } else {

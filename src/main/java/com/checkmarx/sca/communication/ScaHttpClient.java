@@ -36,7 +36,8 @@ import org.artifactory.exception.CancelException;
 import org.jetbrains.annotations.NotNull;
 
 public class ScaHttpClient {
-    private final String UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36";
+    private final String UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36";
     private final HttpClient _httpClient;
     private final String _apiUrl;
     @Inject
@@ -57,7 +58,8 @@ public class ScaHttpClient {
         this._httpClient = HttpClient.newHttpClient();
     }
 
-    public ArtifactInfo getArtifactInformation(String packageType, String name, String version) throws ExecutionException, InterruptedException {
+    public ArtifactInfo getArtifactInformation(String packageType, String name, String version)
+            throws ExecutionException, InterruptedException {
         HttpResponse<String> artifactResponse = this.getArtifactInfoResponse(packageType, name, version);
         if (artifactResponse.statusCode() == 404) {
             artifactResponse = this.TryToFallback(artifactResponse, packageType, name, version);
@@ -68,7 +70,8 @@ public class ScaHttpClient {
         } else {
             ArtifactInfo artifactInfo;
             try {
-                artifactInfo = (ArtifactInfo) (new Gson()).fromJson((String) artifactResponse.body(), ArtifactInfo.class);
+                artifactInfo = (ArtifactInfo) (new Gson()).fromJson((String) artifactResponse.body(),
+                        ArtifactInfo.class);
             } catch (Exception var7) {
                 throw new UnexpectedResponseBodyException((String) artifactResponse.body());
             }
@@ -81,9 +84,11 @@ public class ScaHttpClient {
         }
     }
 
-    public PackageAnalysisAggregation getRiskAggregationOfArtifact(String packageType, String name, String version) throws ExecutionException, InterruptedException {
+    public PackageAnalysisAggregation getRiskAggregationOfArtifact(String packageType, String name, String version)
+            throws ExecutionException, InterruptedException {
         HttpRequest request = this.getRiskAggregationArtifactRequest(packageType, name, version);
-        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient.sendAsync(request, BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
+                .sendAsync(request, BodyHandlers.ofString());
         HttpResponse<String> risksResponse = (HttpResponse) responseFuture.get();
         if (risksResponse.statusCode() != 200) {
             throw new UnexpectedResponseCodeException(risksResponse.statusCode());
@@ -92,7 +97,8 @@ public class ScaHttpClient {
             try {
                 Type listType = (new TypeToken<PackageAnalysisAggregation>() {
                 }).getType();
-                packageAnalysisAggregation = (PackageAnalysisAggregation) (new Gson()).fromJson((String) risksResponse.body(), listType);
+                packageAnalysisAggregation = (PackageAnalysisAggregation) (
+                        new Gson()).fromJson((String) risksResponse.body(), listType);
             } catch (Exception var11) {
                 throw new UnexpectedResponseBodyException((String) risksResponse.body());
             }
@@ -119,9 +125,11 @@ public class ScaHttpClient {
         }
     }
 
-    public Boolean suggestPrivatePackage(ArtifactId artifactId) throws ExecutionException, InterruptedException, MissingResourceException {
+    public Boolean suggestPrivatePackage(ArtifactId artifactId) throws ExecutionException,
+            InterruptedException, MissingResourceException {
         HttpRequest request = this.getSuggestPrivatePackageRequest(artifactId);
-        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient.sendAsync(request, BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
+                .sendAsync(request, BodyHandlers.ofString());
         HttpResponse<String> response = (HttpResponse) responseFuture.get();
         if (response.statusCode() != 200) {
             throw new UnexpectedResponseBodyException((String) response.body());
@@ -130,36 +138,79 @@ public class ScaHttpClient {
         }
     }
 
-    private HttpRequest getRiskAggregationArtifactRequest(String packageType, String name, String version) throws CancelException {
-        String body = String.format("{\"packageName\":\"%s\",\"version\":\"%s\",\"packageManager\":\"%s\"}", name, version, packageType);
-        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, "public/risk-aggregation/aggregated-risks"))).header("content-type", "application/json").header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36").header("cxorigin", this.getCxOrigin()).POST(BodyPublishers.ofString(body)).build();
+    private HttpRequest getRiskAggregationArtifactRequest(String packageType, String name, String version)
+            throws CancelException {
+        String body = String.format("{\"packageName\":\"%s\",\"version\":\"%s\",\"packageManager\":\"%s\"}",
+                name, version, packageType);
+        return HttpRequest.newBuilder(URI.create(
+                String.format("%s%s", this._apiUrl, "public/risk-aggregation/aggregated-risks")))
+                .header("content-type", "application/json")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
+                .header("cxorigin", this.getCxOrigin())
+                .POST(BodyPublishers.ofString(body))
+                .build();
     }
 
-    private HttpRequest getLicenceArtifactRequest(@NotNull String packageType, @NotNull String name, @NotNull String version) throws CancelException {
+    private HttpRequest getLicenceArtifactRequest(
+            @NotNull String packageType,
+            @NotNull String name,
+            @NotNull String version) throws CancelException {
         name = URLEncoder.encode(name, StandardCharsets.UTF_8);
         version = URLEncoder.encode(version, StandardCharsets.UTF_8);
         String url = String.format("public/packages/%s/%s/versions/%s/licenses", packageType, name, version);
-        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, url))).header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36").header("cxorigin", this.getCxOrigin()).GET().build();
+        return HttpRequest.newBuilder(
+                URI.create(String.format("%s%s", this._apiUrl, url)))
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
+                .header("cxorigin", this.getCxOrigin())
+                .GET()
+                .build();
     }
 
-    private HttpRequest getArtifactInfoRequest(@NotNull String packageType, @NotNull String name, @NotNull String version) {
+    private HttpRequest getArtifactInfoRequest(
+            @NotNull String packageType,
+            @NotNull String name,
+            @NotNull String version) {
         name = URLEncoder.encode(name, StandardCharsets.UTF_8);
         version = URLEncoder.encode(version, StandardCharsets.UTF_8);
         String artifactPath = String.format("public/packages/%s/%s/%s", packageType, name, version);
-        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, artifactPath))).header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36").header("cxorigin", this.getCxOrigin()).GET().build();
+        return HttpRequest.newBuilder(
+                URI.create(String.format("%s%s", this._apiUrl, artifactPath)))
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
+                .header("cxorigin", this.getCxOrigin())
+                .GET()
+                .build();
     }
 
     private HttpRequest getSuggestPrivatePackageRequest(ArtifactId artifactId) throws CancelException {
-        String body = String.format("[{\"name\":\"%s\",\"packageManager\":\"%s\",\"version\":\"%s\",\"origin\":\"PrivateArtifactory\"}]", artifactId.Name, artifactId.PackageType, artifactId.Version);
+        String body = String.format("[{\"name\":\"%s\"," +
+                "\"packageManager\":\"%s\"," +
+                "\"version\":\"%s\"," +
+                "\"origin\":\"PrivateArtifactory\"}]",
+                artifactId.Name, artifactId.PackageType, artifactId.Version);
         if (this._accessControlClient == null) {
             throw new UserIsNotAuthenticatedException();
         } else {
             AuthenticationHeader<String, String> authHeader = this._accessControlClient.GetAuthorizationHeader();
-            return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, "private-dependencies-repository/dependencies"))).header((String) authHeader.getKey(), (String) authHeader.getValue()).header("content-type", "application/json").header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36").header("cxorigin", this.getCxOrigin()).POST(BodyPublishers.ofString(body)).build();
+            return HttpRequest.newBuilder(
+                    URI.create(String.format("%s%s", this._apiUrl, "private-dependencies-repository/dependencies")))
+                    .header((String) authHeader.getKey(), (String) authHeader.getValue())
+                    .header("content-type", "application/json")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
+                    .header("cxorigin", this.getCxOrigin())
+                    .POST(BodyPublishers.ofString(body))
+                    .build();
         }
     }
 
-    private HttpResponse<String> TryToFallback(HttpResponse<String> previousResponse, String packageType, String name, String version) throws ExecutionException, InterruptedException {
+    private HttpResponse<String> TryToFallback(
+            HttpResponse<String> previousResponse,
+            String packageType,
+            String name,
+            String version) throws ExecutionException, InterruptedException {
         String newName = null;
         if (packageType.equals(PackageManager.PYPI.packageType())) {
             newName = this._pyPiFallback.applyFallback(name);
@@ -177,7 +228,11 @@ public class ScaHttpClient {
         }
     }
 
-    private HttpResponse<String> TryToFallbackLicense(HttpResponse<String> previousResponse, String packageType, String name, String version) throws ExecutionException, InterruptedException {
+    private HttpResponse<String> TryToFallbackLicense(
+            HttpResponse<String> previousResponse,
+            String packageType,
+            String name,
+            String version) throws ExecutionException, InterruptedException {
         String newName = null;
         if (packageType.equals(PackageManager.PYPI.packageType())) {
             newName = this._pyPiFallback.applyFallback(name);
@@ -187,7 +242,8 @@ public class ScaHttpClient {
             throw new UnexpectedResponseCodeException(previousResponse.statusCode());
         } else {
             HttpRequest artifactRequest = this.getLicenceArtifactRequest(packageType, newName, version);
-            HttpResponse<String> artifactResponse = (HttpResponse) this._httpClient.sendAsync(artifactRequest, BodyHandlers.ofString()).get();
+            HttpResponse<String> artifactResponse = (HttpResponse) this._httpClient
+                    .sendAsync(artifactRequest, BodyHandlers.ofString()).get();
             if (artifactResponse.statusCode() == 404) {
                 throw new UnexpectedResponseCodeException(artifactResponse.statusCode());
             } else {
@@ -196,15 +252,19 @@ public class ScaHttpClient {
         }
     }
 
-    private HttpResponse<String> getArtifactInfoResponse(String packageType, String name, String version) throws ExecutionException, InterruptedException {
+    private HttpResponse<String> getArtifactInfoResponse(String packageType, String name, String version)
+            throws ExecutionException, InterruptedException {
         HttpRequest request = this.getArtifactInfoRequest(packageType, name, version);
-        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient.sendAsync(request, BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
+                .sendAsync(request, BodyHandlers.ofString());
         return (HttpResponse) responseFuture.get();
     }
 
-    private PackageLicensesModel getPackageLicenseOfArtifact(String packageType, String name, String version) throws ExecutionException, InterruptedException {
+    private PackageLicensesModel getPackageLicenseOfArtifact(String packageType, String name, String version)
+            throws ExecutionException, InterruptedException {
         HttpRequest request = this.getLicenceArtifactRequest(packageType, name, version);
-        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient.sendAsync(request, BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
+                .sendAsync(request, BodyHandlers.ofString());
         HttpResponse<String> licenseResponse = (HttpResponse) responseFuture.get();
         if (licenseResponse.statusCode() == 404) {
             licenseResponse = this.TryToFallbackLicense(licenseResponse, packageType, name, version);
@@ -217,7 +277,8 @@ public class ScaHttpClient {
             try {
                 Type listType = (new TypeToken<PackageLicensesModel>() {
                 }).getType();
-                packageAnalysisAggregation = (PackageLicensesModel) (new Gson()).fromJson((String) licenseResponse.body(), listType);
+                packageAnalysisAggregation = (PackageLicensesModel) (new Gson())
+                        .fromJson((String) licenseResponse.body(), listType);
             } catch (Exception var9) {
                 throw new UnexpectedResponseBodyException((String) licenseResponse.body());
             }

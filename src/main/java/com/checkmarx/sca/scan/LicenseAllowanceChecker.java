@@ -32,7 +32,9 @@ public class LicenseAllowanceChecker {
         this._repositories = repositories;
     }
 
-    public void checkLicenseAllowance(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) throws CancelException {
+    public void checkLicenseAllowance(@Nonnull RepoPath repoPath,
+                                      @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths)
+            throws CancelException {
         if (nonVirtualRepoPaths.size() > 1) {
             this._logger.warn(String.format("More than one RepoPath found for the artifact: %s.", repoPath.getName()));
         }
@@ -50,7 +52,9 @@ public class LicenseAllowanceChecker {
             ignoreThreshold = this.getIgnoreProperty(path);
         } while (!"true".equalsIgnoreCase(ignoreThreshold));
 
-        this._logger.warn(String.format("Ignoring the License allowance. Artifact Property \"%s\" is \"true\". Artifact Name: %s", "CxSCA.IgnoreLicenses", repoPath.getName()));
+        this._logger.warn(String.format("Ignoring the License allowance. " +
+                "Artifact Property \"%s\" is \"true\". Artifact Name: %s", "CxSCA.IgnoreLicenses",
+                repoPath.getName()));
     }
 
     private String getIgnoreProperty(RepoPath path) {
@@ -70,12 +74,16 @@ public class LicenseAllowanceChecker {
 
     private void validateLicenseAllowanceFulfillment(RepoPath repoPath) throws CancelException {
         Set<String> licenseAllowanceList = this.getLicenseAllowanceList();
-        this._logger.debug(String.format("License allowance configured: [%s]", String.join(", ", licenseAllowanceList)));
+        this._logger.debug(String.format("License allowance configured: [%s]",
+                String.join(", ", licenseAllowanceList)));
         if (!licenseAllowanceList.isEmpty()) {
-            if (licenseAllowanceList.size() == 1 && licenseAllowanceList.toArray()[0].toString().equalsIgnoreCase("none")) {
+            if (licenseAllowanceList.size() == 1
+                    && licenseAllowanceList.toArray()[0].toString().equalsIgnoreCase("none")) {
                 throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
             } else {
-                List<String> licenses = List.of(this._repositories.getProperty(repoPath, "CxSCA.Licenses").split(","));
+                List<String> licenses = List.of(
+                        this._repositories.getProperty(repoPath, "CxSCA.Licenses").split(",")
+                );
                 Stream var10000 = licenseAllowanceList.stream();
                 Objects.requireNonNull(licenses);
                 if (var10000.noneMatch(licenses::contains)) {

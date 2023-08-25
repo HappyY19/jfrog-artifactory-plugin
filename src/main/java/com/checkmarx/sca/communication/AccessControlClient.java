@@ -115,14 +115,16 @@ public class AccessControlClient {
 
     private void AuthenticateResourceOwner() throws ExecutionException, InterruptedException {
         HttpRequest resourceOwnerGrantRequest = this.CreateResourceOwnerGrantRequest();
-        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient.sendAsync(resourceOwnerGrantRequest, BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
+                .sendAsync(resourceOwnerGrantRequest, BodyHandlers.ofString());
         HttpResponse<String> authenticateResponse = (HttpResponse) responseFuture.get();
         if (authenticateResponse.statusCode() != 200) {
             throw new AuthenticationFailedException(authenticateResponse.statusCode());
         } else {
             AccessControlToken accessControlToken;
             try {
-                accessControlToken = (AccessControlToken) (new Gson()).fromJson((String) authenticateResponse.body(), AccessControlToken.class);
+                accessControlToken = (AccessControlToken) (
+                        new Gson()).fromJson((String) authenticateResponse.body(), AccessControlToken.class);
             } catch (Exception var6) {
                 throw new UnexpectedAuthenticationResponseException((String) authenticateResponse.body());
             }
@@ -147,7 +149,11 @@ public class AccessControlClient {
             String var10000 = (String) e.getKey();
             return var10000 + "=" + URLEncoder.encode((String) e.getValue(), StandardCharsets.UTF_8);
         }).collect(Collectors.joining("&"));
-        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._authenticationUrl, "identity/connect/token"))).header("content-type", "application/x-www-form-urlencoded").POST(BodyPublishers.ofString(form)).build();
+        return HttpRequest.newBuilder(URI.create(
+                String.format("%s%s", this._authenticationUrl, "identity/connect/token")))
+                .header("content-type", "application/x-www-form-urlencoded")
+                .POST(BodyPublishers.ofString(form))
+                .build();
     }
 
     private boolean RefreshTokenAsync() {
@@ -155,6 +161,7 @@ public class AccessControlClient {
     }
 
     private AuthenticationHeader<String, String> GenerateTokenAuthorizationHeader() {
-        return new AuthenticationHeader<>("Authorization", String.format("Bearer %s", this._accessControlToken.getAccessToken()));
+        return new AuthenticationHeader<>("Authorization",
+                String.format("Bearer %s", this._accessControlToken.getAccessToken()));
     }
 }

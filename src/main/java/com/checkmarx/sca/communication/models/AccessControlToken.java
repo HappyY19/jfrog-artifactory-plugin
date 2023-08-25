@@ -36,6 +36,9 @@ public class AccessControlToken {
     }
 
     public boolean isBearerToken() {
-        return this._accessToken != null && this._tokenType != null && this._tokenType.equalsIgnoreCase("Bearer") && !this._accessToken.trim().isEmpty();
+        return this._accessToken != null
+                && this._tokenType != null
+                && this._tokenType.equalsIgnoreCase("Bearer")
+                && !this._accessToken.trim().isEmpty();
     }
 }
