@@ -5,10 +5,7 @@ import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.checkmarx.sca.configuration.SecurityRiskThreshold;
 import com.google.inject.Inject;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import javax.annotation.Nonnull;
 
 import org.artifactory.exception.CancelException;
@@ -27,7 +24,8 @@ public class SecurityThresholdChecker {
         this._repositories = repositories;
     }
 
-    public void checkSecurityRiskThreshold(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) throws CancelException {
+    public void checkSecurityRiskThreshold(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths)
+            throws CancelException {
         if (nonVirtualRepoPaths.size() > 1) {
             this._logger.warn(String.format("More than one RepoPath found for the artifact: %s.", repoPath.getName()));
         }
@@ -37,7 +35,16 @@ public class SecurityThresholdChecker {
         String ignoreThreshold;
         do {
             if (!var3.hasNext()) {
-                this.validateSecurityRiskThresholdFulfillment((RepoPath) nonVirtualRepoPaths.get(0));
+                Optional<Double> securityRiskThresholdCvssScore = this._configuration
+                        .getSecurityRiskThresholdCvssScore();
+                securityRiskThresholdCvssScore.ifPresentOrElse(
+                    (value) -> {
+                        this.validateSecurityRiskThresholdByCvssScore((RepoPath) nonVirtualRepoPaths.get(0), value);
+                    },
+                    ()-> {
+                        this.validateSecurityRiskThresholdFulfillment((RepoPath) nonVirtualRepoPaths.get(0));
+                    }
+                );
                 return;
             }
 
@@ -45,7 +52,8 @@ public class SecurityThresholdChecker {
             ignoreThreshold = this.getIgnoreProperty(path);
         } while (!"true".equalsIgnoreCase(ignoreThreshold));
 
-        this._logger.warn(String.format("Ignoring the security risk threshold. Artifact Property \"%s\" is \"true\". Artifact Name: %s", "CxSCA.IgnoreRiskThreshold", repoPath.getName()));
+        this._logger.warn(String.format("Ignoring the security risk threshold. Artifact Property \"%s\" is \"true\". " +
+                "Artifact Name: %s", "CxSCA.IgnoreRiskThreshold", repoPath.getName()));
     }
 
     private String getIgnoreProperty(RepoPath path) {
@@ -64,7 +72,7 @@ public class SecurityThresholdChecker {
     }
 
     private void validateSecurityRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        SecurityRiskThreshold securityRiskThreshold = this.getSecurityRiskThreshold();
+        SecurityRiskThreshold securityRiskThreshold = this._configuration.getSecurityRiskThreshold();
         this._logger.debug(String.format("Security risk threshold configured: %s", securityRiskThreshold));
         switch (securityRiskThreshold) {
             case LOW:
@@ -77,11 +85,6 @@ public class SecurityThresholdChecker {
                 this.checkIfHighRiskThresholdFulfillment(repoPath);
         }
 
-    }
-
-    private SecurityRiskThreshold getSecurityRiskThreshold() {
-        String configuration = this._configuration.getPropertyOrDefault(ConfigurationEntry.SECURITY_RISK_THRESHOLD);
-        return SecurityRiskThreshold.valueOf(configuration.trim().toUpperCase());
     }
 
     private void checkIfLowRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
@@ -107,6 +110,16 @@ public class SecurityThresholdChecker {
     }
 
     private String getCancelExceptionMessage(RepoPath repoPath) {
-        return String.format("Artifact has risks that do not comply with the security risk threshold. Artifact Name: %s", repoPath.getName());
+        return String.format("Artifact has risks that do not comply with the security risk threshold. " +
+                "Artifact Name: %s", repoPath.getName());
+    }
+
+    private void validateSecurityRiskThresholdByCvssScore(RepoPath repoPath, Double scoreConfigured)
+            throws CancelException {
+        this._logger.debug(String.format("Security risk threshold configured: %s", scoreConfigured));
+        String score = this._repositories.getProperty(repoPath, "CxSCA.RiskScore");
+        if (Double.parseDouble(score) > scoreConfigured) {
+            throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
+        }
     }
 }

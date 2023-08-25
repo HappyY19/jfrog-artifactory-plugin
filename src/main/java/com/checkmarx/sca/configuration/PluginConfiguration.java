@@ -11,6 +11,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 
@@ -62,6 +63,7 @@ public class PluginConfiguration {
         this.validateAuthConfig();
         this.validateExpirationConfig();
         this.validateSeverityThresholdConfig();
+        this.validateSeverityThresholdCvssScoreConfig();
         this.validateLicensesAllowedConfig();
     }
 
@@ -72,12 +74,16 @@ public class PluginConfiguration {
                 int definedValue = Integer.parseInt(expirationTime);
                 int minimumExpirationTime = 1800;
                 if (definedValue < minimumExpirationTime) {
-                    this.properties.setProperty(ConfigurationEntry.DATA_EXPIRATION_TIME.propertyKey(), String.valueOf(minimumExpirationTime));
-                    this.logger.warn("The configuration value defined for the property 'sca.data.expiration-time' is lower than the minimum value allowed. The minimum value will be used.");
+                    this.properties.setProperty(ConfigurationEntry.DATA_EXPIRATION_TIME.propertyKey(),
+                            String.valueOf(minimumExpirationTime));
+                    this.logger.warn("The configuration value defined for the property 'sca.data.expiration-time' " +
+                            "is lower than the minimum value allowed. The minimum value will be used.");
                 }
             } catch (Exception var4) {
-                this.logger.warn(String.format("Error converting the 'sca.data.expiration-time' configuration value, the default value will be used. Exception Message: %s.", var4.getMessage()));
-                this.properties.setProperty(ConfigurationEntry.DATA_EXPIRATION_TIME.propertyKey(), ConfigurationEntry.DATA_EXPIRATION_TIME.defaultValue());
+                this.logger.warn(String.format("Error converting the 'sca.data.expiration-time' configuration value," +
+                        " the default value will be used. Exception Message: %s.", var4.getMessage()));
+                this.properties.setProperty(ConfigurationEntry.DATA_EXPIRATION_TIME.propertyKey(),
+                        ConfigurationEntry.DATA_EXPIRATION_TIME.defaultValue());
             }
         }
 
@@ -89,11 +95,26 @@ public class PluginConfiguration {
             try {
                 SecurityRiskThreshold.valueOf(threshold.trim().toUpperCase());
             } catch (Exception var3) {
-                this.logger.error(String.format("Error converting the 'sca.security.risk.threshold' configuration value, we will use the default value (LOW). Exception Message: %s.", var3.getMessage()));
+                this.logger.error(String.format("Error converting the 'sca.security.risk.threshold' configuration " +
+                        "value, we will use the default value (LOW). Exception Message: %s.", var3.getMessage()));
                 throw var3;
             }
         }
 
+    }
+
+    private void validateSeverityThresholdCvssScoreConfig() {
+        String cvssScore = this.getPropertyOrDefault(ConfigurationEntry.SECURITY_RISK_THRESHOLD_CVSS_SCORE);
+        if (cvssScore != null) {
+            try {
+                Float.parseFloat(cvssScore);
+            } catch (Exception var3) {
+                this.logger.error("cvss score %s cannot be converted to float: " + var3.getMessage()
+                                + ", will use the default value 0.0",
+                        cvssScore);
+                throw var3;
+            }
+        }
     }
 
     private void validateLicensesAllowedConfig() {
@@ -105,7 +126,9 @@ public class PluginConfiguration {
                     return !license.isEmpty();
                 }).distinct();
             } catch (Exception var4) {
-                this.logger.error(String.format("Error converting '%s' configuration value, no license restrictions applied. Exception Message: %s.", ConfigurationEntry.LICENSES_ALLOWED.propertyKey(), var4.getMessage()));
+                this.logger.error(String.format("Error converting '%s' configuration value, no license restrictions " +
+                        "applied. Exception Message: %s.", ConfigurationEntry.LICENSES_ALLOWED.propertyKey(),
+                        var4.getMessage()));
                 throw var4;
             }
         }
@@ -116,7 +139,9 @@ public class PluginConfiguration {
         String account = this.getPropertyOrDefault(ConfigurationEntry.ACCOUNT);
         String username = this.getPropertyOrDefault(ConfigurationEntry.USERNAME);
         String password = this.getPropertyOrDefault(ConfigurationEntry.PASSWORD);
-        if (!Objects.equals(account, (Object) null) || !Objects.equals(username, (Object) null) || !Objects.equals(password, (Object) null)) {
+        if (!Objects.equals(account, (Object) null)
+                || !Objects.equals(username, (Object) null)
+                || !Objects.equals(password, (Object) null)) {
             ArrayList<String> missingFields = new ArrayList();
             if (Objects.equals(account, (Object) null)) {
                 missingFields.add(ConfigurationEntry.ACCOUNT.propertyKey());
@@ -133,10 +158,31 @@ public class PluginConfiguration {
             if (missingFields.isEmpty()) {
                 this.hasAuthConfiguration = true;
             } else {
-                String message = String.format("A mandatory authentication configuration is missing. (Missing configurations: %s)", String.join(", ", missingFields));
+                String message = String.format("A mandatory authentication configuration is missing. " +
+                        "(Missing configurations: %s)", String.join(", ", missingFields));
                 this.logger.error(message);
                 this.logger.info("Working without authentication.");
             }
         }
+    }
+
+    public SecurityRiskThreshold getSecurityRiskThreshold() {
+        String configuration = this.getPropertyOrDefault(ConfigurationEntry.SECURITY_RISK_THRESHOLD);
+        return SecurityRiskThreshold.valueOf(configuration.trim().toUpperCase());
+    }
+
+    public Optional<Double> getSecurityRiskThresholdCvssScore(){
+        Optional<Double> value = Optional.empty();
+        String cvssScore = this.getPropertyOrDefault(ConfigurationEntry.SECURITY_RISK_THRESHOLD_CVSS_SCORE);
+        if (cvssScore != null) {
+            try {
+                value = Optional.of(Double.parseDouble(cvssScore));
+            } catch (Exception var3) {
+                this.logger.error("cvss score %s cannot be converted to float: " + var3.getMessage()
+                                + ", will use the default value 0.0",
+                        cvssScore);
+            }
+        }
+        return value;
     }
 }
