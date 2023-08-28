@@ -71,3 +71,13 @@ executions {
 }
 
 ```
+
+### soft block
+
+If you want to enable soft block, please change `scaPlugin.beforeDownload(repoPath)`
+to `scaPlugin.beforeDownload(repoPath, true)`.
+
+### enable threshold by cvss core
+
+in the property file, add a new line with key `sca.security.risk.threshold.cvss.score` 
+and a double value, for example `sca.security.risk.threshold.cvss.score=4.0`
