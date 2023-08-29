@@ -53,6 +53,7 @@ public class ArtifactRisksFiller {
         } else if (!forceScan && this.scanIsNotNeeded(nonVirtualRepoPaths)) {
             this._logger.info(String.format("Scan ignored by cache configuration. Artifact name: %s",
                     repoPath.getName()));
+            this.logThresholdViolationArtifact(repoPath, nonVirtualRepoPaths);
             return true;
         } else {
             ArtifactId artifactId;
@@ -84,7 +85,7 @@ public class ArtifactRisksFiller {
             boolean risksAddedSuccessfully = false;
             if (packageRiskAggregation != null) {
                 this.addArtifactAnalysisInfo(nonVirtualRepoPaths, packageRiskAggregation);
-                this.logThresholdViolationArtifact(packageRiskAggregation, artifactId);
+                this.logThresholdViolationArtifact(repoPath, nonVirtualRepoPaths);
                 risksAddedSuccessfully = true;
             }
             this._logger.info(String.format("Ended the artifact verification. Artifact name: %s", repoPath.getPath()));
@@ -92,29 +93,36 @@ public class ArtifactRisksFiller {
         }
     }
 
-    private void logThresholdViolationArtifact(PackageAnalysisAggregation packageRiskAggregation,
-                                               ArtifactId artifactId) {
+    private void logThresholdViolationArtifact(
+            @Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) {
+        String repositoryKey = repoPath.getRepoKey();
+        RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
+        String packageType = repoConfiguration.getPackageType();
+        PackageManager packageManager = PackageManager.GetPackageType(packageType);
+        FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
+        ArtifactId artifactId = this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
         Optional<Double> securityRiskThresholdCvssScore = this._configuration.getSecurityRiskThresholdCvssScore();
         securityRiskThresholdCvssScore.ifPresentOrElse(
                 (value) -> {
-                    this.logThresholdViolationByCvssScore(packageRiskAggregation, artifactId, value);
+                    this.logThresholdViolationByCvssScore((RepoPath) nonVirtualRepoPaths.get(0), artifactId, value);
                 },
                 ()-> {
-                    this.logThresholdViolationBySeverity(packageRiskAggregation, artifactId);
+                    this.logThresholdViolationBySeverity((RepoPath) nonVirtualRepoPaths.get(0), artifactId);
                 }
         );
     }
 
-    private void logThresholdViolationBySeverity(PackageAnalysisAggregation packageRiskAggregation,
+    private void logThresholdViolationBySeverity(RepoPath repoPath,
                                                  ArtifactId artifactId) {
-        VulnerabilitiesAggregation vulnerabilitiesAggregation = packageRiskAggregation
-                .getVulnerabilitiesAggregation();
 
+        String vulnerabilities = this._repositories.getProperty(repoPath, "CxSCA.TotalRisks");
+        String mediumRisk = this._repositories.getProperty(repoPath, "CxSCA.MediumSeverityRisks");
+        String highRisk = this._repositories.getProperty(repoPath, "CxSCA.HighSeverityRisks");
         SecurityRiskThreshold securityRiskThreshold = this._configuration.getSecurityRiskThreshold();
         this._logger.debug(String.format("Security risk threshold configured: %s", securityRiskThreshold));
         switch (securityRiskThreshold) {
             case LOW:
-                if (vulnerabilitiesAggregation.getVulnerabilitiesCount() > 0) {
+                if (Integer.parseInt(vulnerabilities) > 0) {
                     this._logger.info(
                             String.format("Artifact vulnerabilities violate the security risk threshold LOW " +
                                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType,
@@ -124,8 +132,7 @@ public class ArtifactRisksFiller {
                 }
                 break;
             case MEDIUM:
-                if (vulnerabilitiesAggregation.getMediumRiskCount() > 0
-                        || vulnerabilitiesAggregation.getHighRiskCount() > 0) {
+                if (Integer.parseInt(mediumRisk) > 0 || Integer.parseInt(highRisk) > 0) {
                     this._logger.info(
                             String.format("Artifact vulnerabilities violate the security risk threshold MEDIUM " +
                                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType,
@@ -135,7 +142,7 @@ public class ArtifactRisksFiller {
                 }
                 break;
             case HIGH:
-                if (vulnerabilitiesAggregation.getHighRiskCount() > 0) {
+                if (Integer.parseInt(highRisk) > 0) {
                     this._logger.info(
                             String.format("Artifact vulnerabilities violate the security risk threshold HIGH " +
                                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType,
@@ -146,9 +153,11 @@ public class ArtifactRisksFiller {
         }
     }
 
-    private void logThresholdViolationByCvssScore(PackageAnalysisAggregation packageRiskAggregation,
+    private void logThresholdViolationByCvssScore(RepoPath repoPath,
                                                   ArtifactId artifactId, Double configScore) {
-        double cvssScore = packageRiskAggregation.getVulnerabilitiesAggregation().getMaxRiskScore();
+
+        String score = this._repositories.getProperty(repoPath, "CxSCA.RiskScore");
+        Double cvssScore = Double.valueOf(score);
 
         if (cvssScore > configScore) {
             this._logger.info(
