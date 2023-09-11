@@ -14,6 +14,7 @@ import com.google.inject.Module;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import javax.annotation.Nonnull;
 
@@ -97,7 +98,12 @@ public class ScaPlugin {
     public void beforeDownload(RepoPath repoPath, boolean softBlock) {
         ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
         boolean riskAddedSuccessfully = this.addPackageRisks(repoPath, nonVirtualRepoPaths);
-        if (!softBlock && riskAddedSuccessfully) {
+        boolean repoInBlockRepoList = this.isRepoInBlockList(repoPath);
+        this._logger.info(
+                String.format("before download, check threshold softBlock: %b, repoInBlockRepoList: %b, " +
+                                "riskAddedSuccessfully: %b",
+                        softBlock, repoInBlockRepoList, riskAddedSuccessfully));
+        if (!softBlock && repoInBlockRepoList && riskAddedSuccessfully) {
             this.checkRiskThreshold(repoPath, nonVirtualRepoPaths);
             this.checkLicenseAllowance(repoPath, nonVirtualRepoPaths);
         }
@@ -193,5 +199,24 @@ public class ScaPlugin {
                     "for the Artifact: %s.\nException: %s", repoPath.getName(), var5));
         }
 
+    }
+
+    private boolean isRepoInBlockList(@Nonnull RepoPath repoPath) {
+        String repoKey = repoPath.getRepoKey();
+        PluginConfiguration pluginConfiguration = (PluginConfiguration) this._injector.getInstance(
+                PluginConfiguration.class);
+
+        String scaSecurityBlockRepositoryKeys = pluginConfiguration.getScaSecurityBlockRepositoryKeys();
+        this._logger.info(String.format("block repo keys: %s", scaSecurityBlockRepositoryKeys));
+        if (scaSecurityBlockRepositoryKeys == null) {
+            return false;
+        }
+
+        String[] keys = scaSecurityBlockRepositoryKeys.split(",");
+        if (Arrays.asList(keys).contains(repoKey)) {
+            this._logger.info("repo key in block list, the artifact will be check against threshold");
+            return true;
+        }
+        return false;
     }
 }

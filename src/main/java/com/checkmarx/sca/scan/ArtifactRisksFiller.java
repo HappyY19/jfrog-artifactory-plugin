@@ -45,6 +45,7 @@ public class ArtifactRisksFiller {
     public boolean addArtifactRisks(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths,
                                     boolean forceScan) {
         String repositoryKey = repoPath.getRepoKey();
+        this._logger.info(String.format("repository key: %s.", repositoryKey));
         RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
         if (nonVirtualRepoPaths.isEmpty()) {
             this._logger.warn(String.format("Artifact not found in any repository. Artifact name: %s.",

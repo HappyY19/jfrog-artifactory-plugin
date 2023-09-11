@@ -185,4 +185,9 @@ public class PluginConfiguration {
         }
         return value;
     }
+
+    public String getScaSecurityBlockRepositoryKeys() {
+        return this.getPropertyOrDefault(ConfigurationEntry.BLOCK_REPOSITORY_KEYS);
+    }
+
 }
