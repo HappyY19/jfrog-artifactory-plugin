@@ -42,6 +42,7 @@ upload {
 }
 
 // curl -i -u admin:password -X POST "http://localhost:8082/artifactory/api/plugins/execute/scaScanCtl?params=searchPattern=*.whl;repos=pypi-remote-cache;forceScan=true"
+
 def pluginGroup = 'cleaners'
 executions {
     scaScanCtl(groups: [pluginGroup]) { params ->
@@ -52,7 +53,6 @@ executions {
         if (!repos) {
             log.debug("No repos were given to index.")
             status = 400
-            message = "No repos were given to index."
             return
         }
 
