@@ -56,7 +56,7 @@ executions {
         if (!repos) {
             log.debug("No repos were given to index.")
             status = 400
-            message = "No repos were given to index."v
+            message = "No repos were given to index."
             return
         }
         log.info "repos:  $repos"
