@@ -47,7 +47,7 @@ def pluginGroup = 'cleaners'
 executions {
     scaScanCtl(groups: [pluginGroup]) { params ->
         def excludePattern = params['excludePattern'] ? params['excludePattern'][0] as String : ''
-        def numberOfThreads = params['numberOfThreads'] ? params['numberOfThreads'][0] as int : ''
+        def numberOfThreads = params['numberOfThreads'] ? params['numberOfThreads'][0] as int : 4
         def searchPattern = params['searchPattern'] ? params['searchPattern'][0] as String : ''
 
         log.info "searchPattern:  $searchPattern"
@@ -56,6 +56,7 @@ executions {
         if (!repos) {
             log.debug("No repos were given to index.")
             status = 400
+            message = "No repos were given to index."v
             return
         }
         log.info "repos:  $repos"
