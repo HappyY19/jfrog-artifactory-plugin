@@ -46,6 +46,7 @@ upload {
 def pluginGroup = 'cleaners'
 executions {
     scaScanCtl(groups: [pluginGroup]) { params ->
+        // params type seems to be Map<String, List<String>>
         def excludePattern = params['excludePattern'] ? params['excludePattern'][0] as String : ''
         def numberOfThreads = params['numberOfThreads'] ? params['numberOfThreads'][0] as int : 4
         def searchPattern = params['searchPattern'] ? params['searchPattern'][0] as String : ''
