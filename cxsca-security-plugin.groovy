@@ -87,6 +87,7 @@ executions {
                         return
                     }
                     scaPlugin.checkArtifactsAlreadyPresent(artifact, forceScan)
+                    scaPlugin.checkArtifactsForSuggestionOnPrivatePackages(artifact)
                 }
             })
             requestThreads << requestThread
