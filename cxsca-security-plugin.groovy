@@ -8,7 +8,7 @@ import org.artifactory.request.Request
 @Field ScaPlugin scaPlugin
 
 
-scanExistingArtifacts()
+//scanExistingArtifacts()
 
 private void scanExistingArtifacts() {
     log.info("Initializing Security Plugin...")
@@ -50,7 +50,8 @@ executions {
         def excludePattern = params['excludePattern'] ? params['excludePattern'][0] as String : ''
         def numberOfThreads = params['numberOfThreads'] ? params['numberOfThreads'][0] as int : 4
         def searchPattern = params['searchPattern'] ? params['searchPattern'][0] as String : ''
-
+        log.info "excludePattern: $excludePattern"
+        log.info "numberOfThreads: $numberOfThreads"
         log.info "searchPattern:  $searchPattern"
         // Ensure the given repo list is not empty
         def repos = params?.get('repos')
@@ -94,6 +95,9 @@ executions {
         }
         requestThreads.each { it.start() }
         requestThreads.each { it.join() }
+//        artifacts.each { artifact ->
+//            scaPlugin.checkArtifactsAlreadyPresent(artifact, forceScan)
+//        }
 
         log.info("Execute Sca Scan Completed")
     }

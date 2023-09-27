@@ -1,5 +1,6 @@
 package com.checkmarx.sca.scan;
 
+import com.checkmarx.sca.PropertiesConstants;
 import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.google.inject.Inject;
@@ -53,7 +54,7 @@ public class LicenseAllowanceChecker {
         } while (!"true".equalsIgnoreCase(ignoreThreshold));
 
         this._logger.warn(String.format("Ignoring the License allowance. " +
-                "Artifact Property \"%s\" is \"true\". Artifact Name: %s", "CxSCA.IgnoreLicenses",
+                "Artifact Property \"%s\" is \"true\". Artifact Name: %s", PropertiesConstants.IGNORE_LICENSES,
                 repoPath.getName()));
     }
 
@@ -63,7 +64,7 @@ public class LicenseAllowanceChecker {
 
         for (Map.Entry<String, String> stringStringEntry : properties) {
             Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
-            if ("CxSCA.IgnoreLicenses".equalsIgnoreCase((String) property.getKey())) {
+            if (PropertiesConstants.IGNORE_LICENSES.equalsIgnoreCase((String) property.getKey())) {
                 ignoreLicense = (String) property.getValue();
                 break;
             }
@@ -82,7 +83,7 @@ public class LicenseAllowanceChecker {
                 throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
             } else {
                 List<String> licenses = List.of(
-                        this._repositories.getProperty(repoPath, "CxSCA.Licenses").split(",")
+                        this._repositories.getProperty(repoPath, PropertiesConstants.LICENSES).split(",")
                 );
                 Stream var10000 = licenseAllowanceList.stream();
                 Objects.requireNonNull(licenses);

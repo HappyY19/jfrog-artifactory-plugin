@@ -1,5 +1,6 @@
 package com.checkmarx.sca.scan;
 
+import com.checkmarx.sca.PropertiesConstants;
 import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.checkmarx.sca.configuration.SecurityRiskThreshold;
@@ -53,7 +54,7 @@ public class SecurityThresholdChecker {
         } while (!"true".equalsIgnoreCase(ignoreThreshold));
 
         this._logger.warn(String.format("Ignoring the security risk threshold. Artifact Property \"%s\" is \"true\". " +
-                "Artifact Name: %s", "CxSCA.IgnoreRiskThreshold", repoPath.getName()));
+                "Artifact Name: %s", PropertiesConstants.IGNORE_RISK_THRESHOLD, repoPath.getName()));
     }
 
     private String getIgnoreProperty(RepoPath path) {
@@ -62,7 +63,7 @@ public class SecurityThresholdChecker {
 
         for (Map.Entry<String, String> stringStringEntry : properties) {
             Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
-            if ("CxSCA.IgnoreRiskThreshold".equalsIgnoreCase((String) property.getKey())) {
+            if (PropertiesConstants.IGNORE_RISK_THRESHOLD.equalsIgnoreCase((String) property.getKey())) {
                 ignoreThreshold = (String) property.getValue();
                 break;
             }
@@ -88,22 +89,22 @@ public class SecurityThresholdChecker {
     }
 
     private void checkIfLowRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        String vulnerabilities = this._repositories.getProperty(repoPath, "CxSCA.TotalRisks");
+        String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS);
         if (Integer.parseInt(vulnerabilities) > 0) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
     private void checkIfMediumRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        String mediumRisk = this._repositories.getProperty(repoPath, "CxSCA.MediumSeverityRisks");
-        String highRisk = this._repositories.getProperty(repoPath, "CxSCA.HighSeverityRisks");
+        String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS);
+        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
         if (Integer.parseInt(mediumRisk) > 0 || Integer.parseInt(highRisk) > 0) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
     private void checkIfHighRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        String highRisk = this._repositories.getProperty(repoPath, "CxSCA.HighSeverityRisks");
+        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
         if (Integer.parseInt(highRisk) > 0) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
@@ -117,7 +118,7 @@ public class SecurityThresholdChecker {
     private void validateSecurityRiskThresholdByCvssScore(RepoPath repoPath, Double scoreConfigured)
             throws CancelException {
         this._logger.debug(String.format("Security risk threshold configured: %s", scoreConfigured));
-        String score = this._repositories.getProperty(repoPath, "CxSCA.RiskScore");
+        String score = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
         if (Double.parseDouble(score) > scoreConfigured) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }

@@ -2,6 +2,7 @@ package com.checkmarx.sca.scan;
 
 import com.checkmarx.sca.IPackageManager;
 import com.checkmarx.sca.PackageManager;
+import com.checkmarx.sca.PropertiesConstants;
 import com.checkmarx.sca.communication.ScaHttpClient;
 import com.checkmarx.sca.communication.exceptions.UnexpectedResponseCodeException;
 import com.checkmarx.sca.configuration.ConfigurationEntry;
@@ -18,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nonnull;
 
 import org.artifactory.fs.FileLayoutInfo;
@@ -96,9 +99,12 @@ public class ArtifactRisksFiller {
 
     private void logThresholdViolationArtifact(
             @Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) {
+        this._logger.debug("logThresholdViolationArtifact start");
+
         String repositoryKey = repoPath.getRepoKey();
         RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
         String packageType = repoConfiguration.getPackageType();
+        this._logger.debug(String.format("package type: %s", packageType));
         PackageManager packageManager = PackageManager.GetPackageType(packageType);
         FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
         ArtifactId artifactId = this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
@@ -111,14 +117,27 @@ public class ArtifactRisksFiller {
                     this.logThresholdViolationBySeverity((RepoPath) nonVirtualRepoPaths.get(0), artifactId);
                 }
         );
+        this._logger.debug("logThresholdViolationArtifact end");
     }
 
     private void logThresholdViolationBySeverity(RepoPath repoPath,
                                                  ArtifactId artifactId) {
+        this._logger.debug("logThresholdViolationBySeverity start");
+        this._logger.debug(String.format("repo path: %s", repoPath.toPath()));
+        Set<Map.Entry<String, String>> properties = this._repositories.getProperties(repoPath).entries();
+        this._logger.debug(String.format("number of entries: %s", properties.size()));
+        for (Map.Entry<String, String> stringStringEntry : properties) {
+            Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
+            this._logger.debug(String.format("Key: %s, value: %s", (String) property.getKey(), (String) property.getValue() ));
+        }
 
-        String vulnerabilities = this._repositories.getProperty(repoPath, "CxSCA.TotalRisks");
-        String mediumRisk = this._repositories.getProperty(repoPath, "CxSCA.MediumSeverityRisks");
-        String highRisk = this._repositories.getProperty(repoPath, "CxSCA.HighSeverityRisks");
+        this._logger.debug(String.format("package name: %s", this._repositories.getProperty(repoPath, "pypi.name")));
+        String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS);
+        this._logger.debug(String.format("total risks from SCA: %s", vulnerabilities));
+        String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS);
+        this._logger.debug(String.format("medium risks from SCA: %s", mediumRisk));
+        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
+        this._logger.debug(String.format("high risks from SCA: %s", highRisk));
         SecurityRiskThreshold securityRiskThreshold = this._configuration.getSecurityRiskThreshold();
         this._logger.debug(String.format("Security risk threshold configured: %s", securityRiskThreshold));
         switch (securityRiskThreshold) {
@@ -152,13 +171,16 @@ public class ArtifactRisksFiller {
                     );
                 }
         }
+        this._logger.debug("logThresholdViolationBySeverity end");
     }
 
     private void logThresholdViolationByCvssScore(RepoPath repoPath,
                                                   ArtifactId artifactId, Double configScore) {
-
-        String score = this._repositories.getProperty(repoPath, "CxSCA.RiskScore");
-        Double cvssScore = Double.valueOf(score);
+        this._logger.debug("logThresholdViolationByCvssScore start");
+        this._logger.debug(String.format("CVSS Score in config: %f", configScore));
+        String score = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
+        this._logger.debug(String.format("CVSS score from SCA: %s", score));
+        double cvssScore = Double.parseDouble(score);
 
         if (cvssScore > configScore) {
             this._logger.info(
@@ -168,7 +190,7 @@ public class ArtifactRisksFiller {
                             artifactId.Version)
             );
         }
-
+        this._logger.debug("logThresholdViolationByCvssScore end");
     }
 
     private boolean scanIsNotNeeded(@Nonnull ArrayList<RepoPath> repoPaths) {
@@ -194,8 +216,8 @@ public class ArtifactRisksFiller {
             } else {
                 Properties properties = this._repositories.getProperties(repoPath);
                 if (properties != null && this.allPropertiesDefined(properties)) {
-                    String scanDate = properties.getFirst("CxSCA.LastScanned");
-                    if (scanDate != null && !scanDate.trim().isEmpty()) {
+                    String scanDate = properties.getFirst(PropertiesConstants.LAST_SCANNED);
+                    if (scanDate != null && !(scanDate.trim().isEmpty())) {
                         Instant instantDate = Instant.parse(scanDate);
                         instantDate = instantDate.plusSeconds((long) expirationTime);
                         return Instant.now().compareTo(instantDate) < 0;
@@ -216,13 +238,13 @@ public class ArtifactRisksFiller {
     }
 
     private boolean allPropertiesDefined(Properties properties) {
-        return properties.containsKey("CxSCA.TotalRisks")
-                && properties.containsKey("CxSCA.LowSeverityRisks")
-                && properties.containsKey("CxSCA.MediumSeverityRisks")
-                && properties.containsKey("CxSCA.HighSeverityRisks")
-                && properties.containsKey("CxSCA.RiskScore")
-                && properties.containsKey("CxSCA.RiskLevel")
-                && properties.containsKey("CxSCA.LastScanned");
+        return properties.containsKey(PropertiesConstants.TOTAL_RISKS)
+                && properties.containsKey(PropertiesConstants.LOW_SEVERITY_RISKS)
+                && properties.containsKey(PropertiesConstants.MEDIUM_SEVERITY_RISKS)
+                && properties.containsKey(PropertiesConstants.HIGH_SEVERITY_RISKS)
+                && properties.containsKey(PropertiesConstants.RISK_SCORE)
+                && properties.containsKey(PropertiesConstants.RISK_LEVEL)
+                && properties.containsKey(PropertiesConstants.LAST_SCANNED);
     }
 
     private int getExpirationTime() {
@@ -299,21 +321,21 @@ public class ArtifactRisksFiller {
             licenceTypes = List.of();
         }
 
-        this._repositories.setProperty(repoPath, "CxSCA.TotalRisks",
+        this._repositories.setProperty(repoPath, PropertiesConstants.TOTAL_RISKS,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getVulnerabilitiesCount())});
-        this._repositories.setProperty(repoPath, "CxSCA.LowSeverityRisks",
+        this._repositories.setProperty(repoPath, PropertiesConstants.LOW_SEVERITY_RISKS,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getLowRiskCount())});
-        this._repositories.setProperty(repoPath, "CxSCA.MediumSeverityRisks",
+        this._repositories.setProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getMediumRiskCount())});
-        this._repositories.setProperty(repoPath, "CxSCA.HighSeverityRisks",
+        this._repositories.setProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getHighRiskCount())});
-        this._repositories.setProperty(repoPath, "CxSCA.RiskScore",
+        this._repositories.setProperty(repoPath, PropertiesConstants.RISK_SCORE,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getMaxRiskScore())});
-        this._repositories.setProperty(repoPath, "CxSCA.RiskLevel",
+        this._repositories.setProperty(repoPath, PropertiesConstants.RISK_LEVEL,
                 new String[]{vulnerabilitiesAggregation.getMaxRiskSeverity()});
-        this._repositories.setProperty(repoPath, "CxSCA.LastScanned",
+        this._repositories.setProperty(repoPath, PropertiesConstants.LAST_SCANNED,
                 new String[]{Instant.now().toString()});
-        this._repositories.setProperty(repoPath, "CxSCA.Licenses",
+        this._repositories.setProperty(repoPath, PropertiesConstants.LICENSES,
                 new String[]{String.join(",", licenceTypes)});
     }
 }
