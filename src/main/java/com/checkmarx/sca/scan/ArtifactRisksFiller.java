@@ -15,19 +15,13 @@ import com.checkmarx.sca.models.VulnerabilitiesAggregation;
 import com.google.inject.Inject;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 
 import org.artifactory.fs.FileLayoutInfo;
 import org.artifactory.md.Properties;
-import org.artifactory.repo.RepoPath;
-import org.artifactory.repo.Repositories;
-import org.artifactory.repo.RepositoryConfiguration;
+import org.artifactory.repo.*;
 import org.slf4j.Logger;
 
 public class ArtifactRisksFiller {
@@ -43,6 +37,62 @@ public class ArtifactRisksFiller {
 
     public ArtifactRisksFiller(@Nonnull Repositories repositories) {
         this._repositories = repositories;
+    }
+
+    public void scanArtifactsConcurrently(@Nonnull List<RepoPath> repoPaths,  boolean forceScan) {
+        this._logger.debug("scanArtifactsConcurrently start");
+        Map<RepoPath, ArtifactId>  repoPathArtifactIdMap = getArtifactsNeedToBeScanned(repoPaths, forceScan);
+        this._logger.debug("Finish collect artifacts");
+        Map<RepoPath, ArtifactInfo> repoPathArtifactInfoMap = this
+                ._scaHttpClient
+                .getArtifactInformationConcurrently(repoPathArtifactIdMap);
+        Map<RepoPath, ArtifactId> newRepoPathArtifactIdMap = repoPathArtifactInfoMap.entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> {
+                            ArtifactInfo artifactInfo = e.getValue();
+                                    return new ArtifactId(
+                                            artifactInfo.getPackageType(),
+                                            artifactInfo.getName(),
+                                            artifactInfo.getVersion()
+                                    );
+                                }
+                        )
+                );
+        Map<RepoPath, PackageAnalysisAggregation> artifactIdPackageAnalysisAggregationMap = this
+                ._scaHttpClient
+                .getRiskAggregationConcurrently(newRepoPathArtifactIdMap);
+        this._logger.info("Finish API calls, start to write properties, and log violations");
+        artifactIdPackageAnalysisAggregationMap.forEach((repoPath, packageAnalysisAggregation) -> {
+            ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
+            this.addArtifactAnalysisInfo(nonVirtualRepoPaths, packageAnalysisAggregation);
+            this.logThresholdViolationArtifact(repoPath, nonVirtualRepoPaths);
+        });
+        this._logger.debug("scanArtifactsConcurrently end");
+    }
+    public Map<RepoPath, ArtifactId> getArtifactsNeedToBeScanned(@Nonnull List<RepoPath> repoPaths, boolean forceScan) {
+
+        return repoPaths.stream()
+                .filter(repoPath -> {
+                    ArrayList<RepoPath> nonVirtualRepoPaths= this.getNonVirtualRepoPaths(repoPath);
+                    return !nonVirtualRepoPaths.isEmpty();
+                })
+                .filter(repoPath -> {
+                    ArrayList<RepoPath> nonVirtualRepoPaths= this.getNonVirtualRepoPaths(repoPath);
+                    return forceScan || !this.scanIsNotNeeded(nonVirtualRepoPaths);
+                })
+                .collect(Collectors.toMap(
+                   repoPath -> repoPath,
+                   repoPath -> {
+                       String repositoryKey = repoPath.getRepoKey();
+                       RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
+                       String packageType = repoConfiguration.getPackageType();
+                       PackageManager packageManager = PackageManager.GetPackageType(packageType);
+                       FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
+                       return this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
+                   }
+                ));
     }
 
     public boolean addArtifactRisks(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths,
@@ -72,6 +122,9 @@ public class ArtifactRisksFiller {
 
                 FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
                 artifactId = this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
+                this._logger.debug(String.format("The artifact is, " +
+                                "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType, artifactId.Name,
+                        artifactId.Version));
                 if (artifactId.isInvalid()) {
                     this._logger.error(String.format("The artifact id was not built correctly. " +
                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType, artifactId.Name,
@@ -104,7 +157,7 @@ public class ArtifactRisksFiller {
         String repositoryKey = repoPath.getRepoKey();
         RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
         String packageType = repoConfiguration.getPackageType();
-        this._logger.debug(String.format("package type: %s", packageType));
+        this._logger.debug(String.format("jfrog package type (not SCA): %s", packageType));
         PackageManager packageManager = PackageManager.GetPackageType(packageType);
         FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
         ArtifactId artifactId = this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
@@ -123,22 +176,21 @@ public class ArtifactRisksFiller {
     private void logThresholdViolationBySeverity(RepoPath repoPath,
                                                  ArtifactId artifactId) {
         this._logger.debug("logThresholdViolationBySeverity start");
-        this._logger.debug(String.format("repo path: %s", repoPath.toPath()));
         Set<Map.Entry<String, String>> properties = this._repositories.getProperties(repoPath).entries();
-        this._logger.debug(String.format("number of entries: %s", properties.size()));
         for (Map.Entry<String, String> stringStringEntry : properties) {
             Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
             this._logger.debug(String.format("Key: %s, value: %s", (String) property.getKey(), (String) property.getValue() ));
         }
-
-        this._logger.debug(String.format("package name: %s", this._repositories.getProperty(repoPath, "pypi.name")));
         String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS);
-        this._logger.debug(String.format("total risks from SCA: %s", vulnerabilities));
         String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS);
-        this._logger.debug(String.format("medium risks from SCA: %s", mediumRisk));
         String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
-        this._logger.debug(String.format("high risks from SCA: %s", highRisk));
         SecurityRiskThreshold securityRiskThreshold = this._configuration.getSecurityRiskThreshold();
+        this._logger.debug(String.format("repo path: %s", repoPath.toPath()));
+        this._logger.debug(String.format("number of entries: %s", properties.size()));
+        this._logger.debug(String.format("package name: %s", this._repositories.getProperty(repoPath, "pypi.name")));
+        this._logger.debug(String.format("total risks from SCA: %s", vulnerabilities));
+        this._logger.debug(String.format("medium risks from SCA: %s", mediumRisk));
+        this._logger.debug(String.format("high risks from SCA: %s", highRisk));
         this._logger.debug(String.format("Security risk threshold configured: %s", securityRiskThreshold));
         switch (securityRiskThreshold) {
             case LOW:
@@ -273,6 +325,8 @@ public class ArtifactRisksFiller {
     private PackageAnalysisAggregation scanArtifact(@Nonnull ArtifactId artifactId) {
         ArtifactInfo artifactInfo;
         try {
+            this._logger.debug(String.format("Info from artifactId: package type: %s, name: %s, version: %s", artifactId.PackageType, artifactId.Name,
+                    artifactId.Version));
             artifactInfo = this._scaHttpClient.getArtifactInformation(artifactId.PackageType, artifactId.Name,
                     artifactId.Version);
             this._logger.debug(String.format("For CxSCA the artifact is identified by %s.", artifactInfo.getId()));
@@ -290,6 +344,8 @@ public class ArtifactRisksFiller {
         }
 
         try {
+            this._logger.debug(String.format("Info from artifactInfo: package type: %s, name: %s, version: %s", artifactInfo.getPackageType(),
+                    artifactInfo.getName(), artifactInfo.getVersion()));
             return this._scaHttpClient.getRiskAggregationOfArtifact(artifactInfo.getPackageType(),
                     artifactInfo.getName(), artifactInfo.getVersion());
         } catch (Exception var4) {
@@ -337,5 +393,33 @@ public class ArtifactRisksFiller {
                 new String[]{Instant.now().toString()});
         this._repositories.setProperty(repoPath, PropertiesConstants.LICENSES,
                 new String[]{String.join(",", licenceTypes)});
+    }
+
+    public ArrayList<RepoPath> getNonVirtualRepoPaths(RepoPath repoPath) {
+        String repositoryKey = repoPath.getRepoKey();
+        RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
+        ArrayList<RepoPath> nonVirtualRepoPaths = new ArrayList<>();
+        if (repoConfiguration instanceof VirtualRepositoryConfiguration) {
+            this.setNonVirtualRepoPathsRepoPathsOfVirtualRepository(nonVirtualRepoPaths, repoConfiguration,
+                    repoPath.getPath());
+        } else {
+            nonVirtualRepoPaths.add(repoPath);
+        }
+
+        return nonVirtualRepoPaths;
+    }
+
+    private void setNonVirtualRepoPathsRepoPathsOfVirtualRepository(@Nonnull ArrayList<RepoPath> nonVirtualRepoPaths,
+                                                                    @Nonnull RepositoryConfiguration repoConfiguration,
+                                                                    @Nonnull String artifactPath) {
+        VirtualRepositoryConfiguration virtualConfiguration = (VirtualRepositoryConfiguration) repoConfiguration;
+
+        for (String repo : virtualConfiguration.getRepositories()) {
+            RepoPath repoPathFromVirtual = RepoPathFactory.create(repo, artifactPath);
+            if (this._repositories.exists(repoPathFromVirtual)) {
+                nonVirtualRepoPaths.add(repoPathFromVirtual);
+            }
+        }
+
     }
 }

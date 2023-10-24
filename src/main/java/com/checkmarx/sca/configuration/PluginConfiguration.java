@@ -190,4 +190,8 @@ public class PluginConfiguration {
         return this.getPropertyOrDefault(ConfigurationEntry.BLOCK_REPOSITORY_KEYS);
     }
 
+    public Logger getLogger() {
+        return this.logger;
+    }
+
 }

@@ -3,6 +3,7 @@ package com.checkmarx.sca;
 import com.checkmarx.sca.communication.AccessControlClient;
 import com.checkmarx.sca.configuration.ConfigurationReader;
 import com.checkmarx.sca.configuration.PluginConfiguration;
+import com.checkmarx.sca.models.ArtifactId;
 import com.checkmarx.sca.scan.ArtifactRisksFiller;
 import com.checkmarx.sca.scan.LicenseAllowanceChecker;
 import com.checkmarx.sca.scan.SecurityThresholdChecker;
@@ -15,10 +16,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
+import java.util.List;
 import javax.annotation.Nonnull;
 
 import org.artifactory.exception.CancelException;
+import org.artifactory.fs.FileLayoutInfo;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.repo.RepoPathFactory;
 import org.artifactory.repo.Repositories;
@@ -117,32 +119,11 @@ public class ScaPlugin {
     }
 
     private ArrayList<RepoPath> getNonVirtualRepoPaths(RepoPath repoPath) {
-        String repositoryKey = repoPath.getRepoKey();
-        RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
-        ArrayList<RepoPath> nonVirtualRepoPaths = new ArrayList<>();
-        if (repoConfiguration instanceof VirtualRepositoryConfiguration) {
-            this.setNonVirtualRepoPathsRepoPathsOfVirtualRepository(nonVirtualRepoPaths, repoConfiguration,
-                    repoPath.getPath());
-        } else {
-            nonVirtualRepoPaths.add(repoPath);
-        }
-
-        return nonVirtualRepoPaths;
+        ArtifactRisksFiller artifactChecker = (ArtifactRisksFiller) this._injector
+                .getInstance(ArtifactRisksFiller.class);
+        return artifactChecker.getNonVirtualRepoPaths(repoPath);
     }
 
-    private void setNonVirtualRepoPathsRepoPathsOfVirtualRepository(@Nonnull ArrayList<RepoPath> nonVirtualRepoPaths,
-                                                                    @Nonnull RepositoryConfiguration repoConfiguration,
-                                                                    @Nonnull String artifactPath) {
-        VirtualRepositoryConfiguration virtualConfiguration = (VirtualRepositoryConfiguration) repoConfiguration;
-
-        for (String repo : virtualConfiguration.getRepositories()) {
-            RepoPath repoPathFromVirtual = RepoPathFactory.create(repo, artifactPath);
-            if (this._repositories.exists(repoPathFromVirtual)) {
-                nonVirtualRepoPaths.add(repoPathFromVirtual);
-            }
-        }
-
-    }
 
     private boolean addPackageRisks(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) {
         return this.addPackageRisks(repoPath, nonVirtualRepoPaths, false);
@@ -218,5 +199,11 @@ public class ScaPlugin {
             return true;
         }
         return false;
+    }
+
+    public void scanArtifactsConcurrently(@Nonnull List<RepoPath> repoPaths, boolean forceScan) {
+        ArtifactRisksFiller artifactRisksFiller = (ArtifactRisksFiller) this._injector
+                .getInstance(ArtifactRisksFiller.class);
+        artifactRisksFiller.scanArtifactsConcurrently(repoPaths, forceScan);
     }
 }
