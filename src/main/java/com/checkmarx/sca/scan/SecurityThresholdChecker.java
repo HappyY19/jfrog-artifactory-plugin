@@ -27,6 +27,9 @@ public class SecurityThresholdChecker {
 
     public void checkSecurityRiskThreshold(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths)
             throws CancelException {
+        if (notLog4jCore(repoPath)) {
+            return;
+        }
         if (nonVirtualRepoPaths.size() > 1) {
             this._logger.warn(String.format("More than one RepoPath found for the artifact: %s.", repoPath.getName()));
         }
@@ -122,5 +125,12 @@ public class SecurityThresholdChecker {
         if (Double.parseDouble(score) > scoreConfigured) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
+    }
+
+    private boolean notLog4jCore(RepoPath repoPath) {
+        String packageWholePath = repoPath.getPath();
+        String packageName = "log4j-core";
+        String packagePartialPath = "org/apache/logging/log4j";
+        return !(packageWholePath.startsWith(packagePartialPath) && packageWholePath.contains(packageName));
     }
 }

@@ -100,12 +100,12 @@ public class ScaPlugin {
     public void beforeDownload(RepoPath repoPath, boolean softBlock) {
         ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
         boolean riskAddedSuccessfully = this.addPackageRisks(repoPath, nonVirtualRepoPaths);
-        boolean repoInBlockRepoList = this.isRepoInBlockList(repoPath);
-        this._logger.info(
-                String.format("before download, check threshold softBlock: %b, repoInBlockRepoList: %b, " +
-                                "riskAddedSuccessfully: %b",
-                        softBlock, repoInBlockRepoList, riskAddedSuccessfully));
-        if (!softBlock && repoInBlockRepoList && riskAddedSuccessfully) {
+//        boolean repoInBlockRepoList = this.isRepoInBlockList(repoPath);
+//        this._logger.info(
+//                String.format("before download, check threshold softBlock: %b, repoInBlockRepoList: %b, " +
+//                                "riskAddedSuccessfully: %b",
+//                        softBlock, repoInBlockRepoList, riskAddedSuccessfully));
+        if (!softBlock && riskAddedSuccessfully) {
             this.checkRiskThreshold(repoPath, nonVirtualRepoPaths);
             this.checkLicenseAllowance(repoPath, nonVirtualRepoPaths);
         }
