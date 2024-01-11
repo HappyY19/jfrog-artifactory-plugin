@@ -122,13 +122,14 @@ public class SecurityThresholdChecker {
             throws CancelException {
         this._logger.debug(String.format("Security risk threshold configured: %s", scoreConfigured));
         String score = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
-        if (Double.parseDouble(score) > scoreConfigured) {
+        if (Double.parseDouble(score) >= scoreConfigured) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
     private boolean notLog4jCore(RepoPath repoPath) {
         String packageWholePath = repoPath.getPath();
+        this._logger.debug(String.format("packageWholePath  %s\n", packageWholePath));
         String packageName = "log4j-core";
         String packagePartialPath = "org/apache/logging/log4j";
         return !(packageWholePath.startsWith(packagePartialPath) && packageWholePath.contains(packageName));
