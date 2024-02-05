@@ -1,0 +1,4 @@
+PackageName,PackageVersion
+log4j-core,2.12.0
+log4j-core,*
+jetty-ajp,7.0.2.v20100331
