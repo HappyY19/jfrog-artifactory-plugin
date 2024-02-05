@@ -1,6 +1,7 @@
 package com.checkmarx.sca;
 
 import com.checkmarx.sca.communication.AccessControlClient;
+import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.ConfigurationReader;
 import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.checkmarx.sca.models.ArtifactId;
@@ -12,11 +13,11 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import javax.annotation.Nonnull;
 
 import org.artifactory.exception.CancelException;
@@ -43,7 +44,8 @@ public class ScaPlugin {
             AccessControlClient accessControlClient = this.tryToAuthenticate(configuration, logger);
             this._repositories = repositories;
             ArtifactRisksFiller risksFiller = new ArtifactRisksFiller(repositories);
-            SecurityThresholdChecker securityThresholdChecker = new SecurityThresholdChecker(repositories);
+            HashMap<String, HashSet<String>> packageBlackList = this.getPackagesBlackList(configuration);
+            SecurityThresholdChecker securityThresholdChecker = new SecurityThresholdChecker(repositories, packageBlackList);
             LicenseAllowanceChecker licenseAllowanceChecker = new LicenseAllowanceChecker(repositories);
             PrivatePackageSuggestionHandler privatePackageSuggestionHandler = new PrivatePackageSuggestionHandler(
                     repositories, configuration.hasAuthConfiguration());
@@ -54,6 +56,33 @@ public class ScaPlugin {
             this._logger.error("Sca plugin could not be initialized!");
             throw var11;
         }
+    }
+
+    private HashMap<String, HashSet<String>> getPackagesBlackList(PluginConfiguration configuration) {
+        HashMap<String, HashSet<String>> result = new HashMap<String, HashSet<String>>();
+        String packageBlacklistCsvPath = configuration.getPropertyOrDefault(ConfigurationEntry.PACKAGE_BLACKLIST_CSV_PATH);
+        String headers;
+        String line;
+        try (BufferedReader br = new BufferedReader(new FileReader(packageBlacklistCsvPath))) {
+            // the first line is the header
+            headers = br.readLine();
+            while((line = br.readLine()) != null){
+                String[] values = line.split(",");
+                String packageName = values[0];
+                String packageVersion = values[1];
+                if (!result.containsKey(packageName)) {
+                    HashSet<String> versions = new HashSet<String>();
+                    versions.add(packageVersion);
+                    result.put(packageName, versions);
+                } else {
+                    HashSet<String> versions = result.get(packageName);
+                    versions.add(packageVersion);
+                }
+            }
+        } catch (Exception e){
+            this._logger.error(String.format("Error during read csv file, %s", e));
+        }
+        return result;
     }
 
     private AccessControlClient tryToAuthenticate(@Nonnull PluginConfiguration configuration, @Nonnull Logger logger) {
@@ -97,7 +126,7 @@ public class ScaPlugin {
         this.beforeDownload(repoPath, false);
     }
 
-    public void beforeDownload(RepoPath repoPath, boolean softBlock) {
+    public void beforeDownload(RepoPath repoPath, boolean disableBlock) {
         ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
         boolean riskAddedSuccessfully = this.addPackageRisks(repoPath, nonVirtualRepoPaths);
 //        boolean repoInBlockRepoList = this.isRepoInBlockList(repoPath);
@@ -105,7 +134,7 @@ public class ScaPlugin {
 //                String.format("before download, check threshold softBlock: %b, repoInBlockRepoList: %b, " +
 //                                "riskAddedSuccessfully: %b",
 //                        softBlock, repoInBlockRepoList, riskAddedSuccessfully));
-        if (!softBlock && riskAddedSuccessfully) {
+        if (!disableBlock && riskAddedSuccessfully) {
             this.checkRiskThreshold(repoPath, nonVirtualRepoPaths);
             this.checkLicenseAllowance(repoPath, nonVirtualRepoPaths);
         }
