@@ -12,7 +12,8 @@ public enum ConfigurationEntry implements IConfigurationEntry {
     ACCOUNT("sca.account", (String) null),
     USERNAME("sca.username", (String) null),
     PASSWORD("sca.password", (String) null),
-    PACKAGE_BLACKLIST_CSV_PATH("sca.security.packages.blacklist.csv.path", (String) null);
+    PACKAGE_BLACKLIST_CSV_PATH("sca.security.packages.blacklist.csv.path", (String) null),
+    PACKAGE_WHITELIST_CSV_PATH("sca.security.packages.whitelist.csv.path", (String) null);
 
     private final String propertyKey;
     private final String defaultValue;

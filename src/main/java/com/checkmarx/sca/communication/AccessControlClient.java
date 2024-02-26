@@ -57,12 +57,12 @@ public class AccessControlClient {
             this._accessControlCredentials = accessControlCredentials;
             this.AuthenticateResourceOwner();
         } catch (Exception var3) {
-            this._logger.info("Authentication failed. Working without authentication.");
+            this._logger.debug("Authentication failed. Working without authentication.");
             this._logger.error(var3.getMessage(), var3);
             return false;
         }
 
-        this._logger.info("Authentication configured successfully.");
+        this._logger.debug("Authentication configured successfully.");
         return true;
     }
 

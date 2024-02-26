@@ -5,6 +5,7 @@ import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.ConfigurationReader;
 import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.checkmarx.sca.models.ArtifactId;
+import com.checkmarx.sca.models.PackageInfo;
 import com.checkmarx.sca.scan.ArtifactRisksFiller;
 import com.checkmarx.sca.scan.LicenseAllowanceChecker;
 import com.checkmarx.sca.scan.SecurityThresholdChecker;
@@ -12,6 +13,10 @@ import com.checkmarx.sca.suggestion.PrivatePackageSuggestionHandler;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
+import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.MappingIterator;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -44,8 +49,14 @@ public class ScaPlugin {
             AccessControlClient accessControlClient = this.tryToAuthenticate(configuration, logger);
             this._repositories = repositories;
             ArtifactRisksFiller risksFiller = new ArtifactRisksFiller(repositories);
-            HashMap<String, HashSet<String>> packageBlackList = this.getPackagesBlackList(configuration);
-            SecurityThresholdChecker securityThresholdChecker = new SecurityThresholdChecker(repositories, packageBlackList);
+            String packageBlacklistCsvPath = configuration.getPropertyOrDefault(
+                    ConfigurationEntry.PACKAGE_BLACKLIST_CSV_PATH);
+            String packageWhitelistCsvPath = configuration.getPropertyOrDefault(
+                    ConfigurationEntry.PACKAGE_WHITELIST_CSV_PATH);
+            ArrayList<PackageInfo> packageBlackList = this.getPackagesList(packageBlacklistCsvPath);
+            ArrayList<PackageInfo> packageWhiteList = this.getPackagesList(packageWhitelistCsvPath);
+            SecurityThresholdChecker securityThresholdChecker = new SecurityThresholdChecker(repositories,
+                    packageBlackList, packageWhiteList);
             LicenseAllowanceChecker licenseAllowanceChecker = new LicenseAllowanceChecker(repositories);
             PrivatePackageSuggestionHandler privatePackageSuggestionHandler = new PrivatePackageSuggestionHandler(
                     repositories, configuration.hasAuthConfiguration());
@@ -58,28 +69,17 @@ public class ScaPlugin {
         }
     }
 
-    private HashMap<String, HashSet<String>> getPackagesBlackList(PluginConfiguration configuration) {
-        HashMap<String, HashSet<String>> result = new HashMap<String, HashSet<String>>();
-        String packageBlacklistCsvPath = configuration.getPropertyOrDefault(ConfigurationEntry.PACKAGE_BLACKLIST_CSV_PATH);
-        String headers;
-        String line;
-        try (BufferedReader br = new BufferedReader(new FileReader(packageBlacklistCsvPath))) {
-            // the first line is the header
-            headers = br.readLine();
-            while((line = br.readLine()) != null){
-                String[] values = line.split(",");
-                String packageName = values[0];
-                String packageVersion = values[1];
-                if (!result.containsKey(packageName)) {
-                    HashSet<String> versions = new HashSet<String>();
-                    versions.add(packageVersion);
-                    result.put(packageName, versions);
-                } else {
-                    HashSet<String> versions = result.get(packageName);
-                    versions.add(packageVersion);
-                }
+    private ArrayList<PackageInfo> getPackagesList(String packageBlacklistCsvPath) {
+        ArrayList<PackageInfo> result = new ArrayList<>();
+        CsvMapper csvMapper = new CsvMapper();
+        ObjectReader oReader = csvMapper.readerWithSchemaFor(PackageInfo.class);
+        try (FileReader reader = new FileReader(packageBlacklistCsvPath)) {
+            MappingIterator<PackageInfo> mi = oReader.readValues(reader);
+            while (mi.hasNext()) {
+                PackageInfo current = mi.next();
+                result.add(current);
             }
-        } catch (Exception e){
+        }catch (Exception e){
             this._logger.error(String.format("Error during read csv file, %s", e));
         }
         return result;
@@ -93,7 +93,7 @@ public class ScaPlugin {
                 accessControlClient = new AccessControlClient(configuration, logger);
                 accessControlClient.Authenticate(configuration.getAccessControlCredentials());
             } else {
-                this._logger.info("Authentication configuration not defined.");
+                this._logger.debug("Authentication configuration not defined.");
             }
         } catch (Exception var5) {
             this._logger.error("Authentication failed. Working without authentication.");
@@ -130,7 +130,7 @@ public class ScaPlugin {
         ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
         boolean riskAddedSuccessfully = this.addPackageRisks(repoPath, nonVirtualRepoPaths);
 //        boolean repoInBlockRepoList = this.isRepoInBlockList(repoPath);
-//        this._logger.info(
+//        this._logger.debug(
 //                String.format("before download, check threshold softBlock: %b, repoInBlockRepoList: %b, " +
 //                                "riskAddedSuccessfully: %b",
 //                        softBlock, repoInBlockRepoList, riskAddedSuccessfully));
@@ -183,7 +183,7 @@ public class ScaPlugin {
                     .getInstance(SecurityThresholdChecker.class);
             thresholdChecker.checkSecurityRiskThreshold(repoPath, nonVirtualRepoPaths);
         } catch (CancelException var4) {
-            this._logger.info(
+            this._logger.warn(
                     String.format("The download was blocked by security threshold configuration. Artifact Name: %s",
                             repoPath.getName()));
             throw var4;
@@ -201,7 +201,7 @@ public class ScaPlugin {
                     .getInstance(LicenseAllowanceChecker.class);
             licenseAllowanceChecker.checkLicenseAllowance(repoPath, nonVirtualRepoPaths);
         } catch (CancelException var4) {
-            this._logger.info(String.format("The download was blocked by license allowance configuration. " +
+            this._logger.warn(String.format("The download was blocked by license allowance configuration. " +
                     "Artifact Name: %s", repoPath.getName()));
             throw var4;
         } catch (Exception var5) {
@@ -217,14 +217,14 @@ public class ScaPlugin {
                 PluginConfiguration.class);
 
         String scaSecurityBlockRepositoryKeys = pluginConfiguration.getScaSecurityBlockRepositoryKeys();
-        this._logger.info(String.format("block repo keys: %s", scaSecurityBlockRepositoryKeys));
+        this._logger.debug(String.format("block repo keys: %s", scaSecurityBlockRepositoryKeys));
         if (scaSecurityBlockRepositoryKeys == null) {
             return false;
         }
 
         String[] keys = scaSecurityBlockRepositoryKeys.split(",");
         if (Arrays.asList(keys).contains(repoKey)) {
-            this._logger.info("repo key in block list, the artifact will be check against threshold");
+            this._logger.debug("repo key in block list, the artifact will be check against threshold");
             return true;
         }
         return false;

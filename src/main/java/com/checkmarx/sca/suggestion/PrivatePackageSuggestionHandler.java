@@ -77,7 +77,7 @@ public class PrivatePackageSuggestionHandler {
     private Boolean performSuggestion(ArtifactId artifactId) {
         try {
             Boolean output = this._scaHttpClient.suggestPrivatePackage(artifactId);
-            this._logger.info("The package was suggested as potential private.");
+            this._logger.debug("The package was suggested as potential private.");
             return output;
         } catch (UnexpectedResponseCodeException | InterruptedException | ExecutionException var3) {
             this._logger.warn("Failed to publish private package suggestion", var3);

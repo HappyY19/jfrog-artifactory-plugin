@@ -4,9 +4,11 @@ import com.checkmarx.sca.PropertiesConstants;
 import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.checkmarx.sca.configuration.SecurityRiskThreshold;
+import com.checkmarx.sca.models.PackageInfo;
 import com.google.inject.Inject;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 
 import org.artifactory.exception.CancelException;
@@ -20,19 +22,28 @@ public class SecurityThresholdChecker {
     @Inject
     private PluginConfiguration _configuration;
     private final Repositories _repositories;
-    private final HashMap<String, HashSet<String>> _packageBlackList;
+    private final ArrayList<PackageInfo> _packageBlackList;
+    private final ArrayList<PackageInfo> _packageWhiteList;
 
     public SecurityThresholdChecker(@Nonnull Repositories repositories,
-                                    @Nonnull HashMap<String, HashSet<String>> packageBlackList) {
+                                    @Nonnull ArrayList<PackageInfo> packageBlackList,
+                                    @Nonnull ArrayList<PackageInfo> packageWhiteList) {
         this._repositories = repositories;
         this._packageBlackList = packageBlackList;
+        this._packageWhiteList = packageWhiteList;
     }
 
     public void checkSecurityRiskThreshold(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths)
             throws CancelException {
-        if (notInPackagesBlackList(repoPath)) {
+        String packageNameVersionStr = getPackageNameVersionFromRepoPath(repoPath);
+        String[] names = packageNameVersionStr.split(",");
+        String packageName = names[0];
+        String packageVersion = names[1];
+
+        if (inPackagesWitheList(packageName, packageVersion)) {
             return;
         }
+
         if (nonVirtualRepoPaths.size() > 1) {
             this._logger.warn(String.format("More than one RepoPath found for the artifact: %s.", repoPath.getName()));
         }
@@ -141,13 +152,26 @@ public class SecurityThresholdChecker {
         if (!this._repositories.hasProperty(repoPath, PropertiesConstants.RISK_SCORE)) {
             throw new CancelException(String.format("Property CxSCA.RiskScore missing in %s", repoPath), 403);
         }
-        String score = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
-        if (Double.parseDouble(score) >= scoreConfigured) {
-            throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
+        String scoreStr = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
+        double score = Double.parseDouble(scoreStr);
+
+        String packageNameVersionStr = getPackageNameVersionFromRepoPath(repoPath);
+        String[] names = packageNameVersionStr.split(",");
+        String packageName = names[0];
+        String packageVersion = names[1];
+
+        if (this._packageBlackList.isEmpty()) {
+            if (score >= scoreConfigured) {
+                throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
+            }
+        } else {
+            if (score >= scoreConfigured || scoreBiggerThanOrEqualToBlackListScore(packageName, packageVersion, score)) {
+                throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
+            }
         }
     }
 
-    private boolean notInPackagesBlackList(RepoPath repoPath) {
+    private String getPackageNameVersionFromRepoPath(RepoPath repoPath) {
         String packageWholePath = repoPath.getPath();
         this._logger.debug(String.format("packageWholePath  %s\n", packageWholePath));
         String[] names = packageWholePath.split("/");
@@ -159,7 +183,29 @@ public class SecurityThresholdChecker {
         String[] packageVersionWithFileExtensionStr = packageVersionWithFileExtension.split("\\.");
         String[] packageVersionStr = Arrays.copyOfRange(packageVersionWithFileExtensionStr, 0, packageVersionWithFileExtensionStr.length - 1);
         String packageVersion = String.join(".", packageVersionStr);
-        HashSet<String> packageVersions = this._packageBlackList.getOrDefault(packageName, new HashSet<String>());
-        return !packageVersions.contains(packageVersion);
+        return String.format("%s,%s", packageName, packageVersion) ;
     }
+
+
+    private boolean inPackagesWitheList(String packageName, String packageVersion){
+        List<PackageInfo> packagesInWhiteList = this._packageWhiteList
+                .stream()
+                .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
+                        && packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion)
+                )
+                .collect(Collectors.toList());
+        return !packagesInWhiteList.isEmpty();
+    }
+
+    private boolean scoreBiggerThanOrEqualToBlackListScore(String packageName, String packageVersion, double score) {
+        List<PackageInfo> packagesList = this._packageBlackList
+                .stream()
+                .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
+                        && packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion)
+                        && (score >= packageInfo.getCvssScore())
+                )
+                .collect(Collectors.toList());
+        return !packagesList.isEmpty();
+    }
+
 }

@@ -63,7 +63,7 @@ public class ArtifactRisksFiller {
         Map<RepoPath, PackageAnalysisAggregation> artifactIdPackageAnalysisAggregationMap = this
                 ._scaHttpClient
                 .getRiskAggregationConcurrently(newRepoPathArtifactIdMap);
-        this._logger.info("Finish API calls, start to write properties, and log violations");
+        this._logger.debug("Finish API calls, start to write properties, and log violations");
         artifactIdPackageAnalysisAggregationMap.forEach((repoPath, packageAnalysisAggregation) -> {
             ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
             this.addArtifactAnalysisInfo(nonVirtualRepoPaths, packageAnalysisAggregation);
@@ -98,7 +98,7 @@ public class ArtifactRisksFiller {
     public boolean addArtifactRisks(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths,
                                     boolean forceScan) {
         String repositoryKey = repoPath.getRepoKey();
-        this._logger.info(String.format("repository key: %s.", repositoryKey));
+        this._logger.debug(String.format("repository key: %s.", repositoryKey));
         RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
         if (nonVirtualRepoPaths.isEmpty()) {
             this._logger.warn(String.format("Artifact not found in any repository. Artifact name: %s.",
@@ -137,7 +137,7 @@ public class ArtifactRisksFiller {
                 return false;
             }
 
-            this._logger.info(String.format("Started artifact verification. Artifact name: %s", repoPath.getPath()));
+            this._logger.debug(String.format("Started artifact verification. Artifact name: %s", repoPath.getPath()));
             PackageAnalysisAggregation packageRiskAggregation = this.scanArtifact(artifactId);
             boolean risksAddedSuccessfully = false;
             if (packageRiskAggregation != null) {
@@ -145,7 +145,7 @@ public class ArtifactRisksFiller {
                 this.logThresholdViolationArtifact(repoPath, nonVirtualRepoPaths);
                 risksAddedSuccessfully = true;
             }
-            this._logger.info(String.format("Ended the artifact verification. Artifact name: %s", repoPath.getPath()));
+            this._logger.debug(String.format("Ended the artifact verification. Artifact name: %s", repoPath.getPath()));
             return risksAddedSuccessfully;
         }
     }
@@ -195,7 +195,7 @@ public class ArtifactRisksFiller {
         switch (securityRiskThreshold) {
             case LOW:
                 if (Integer.parseInt(vulnerabilities) > 0) {
-                    this._logger.info(
+                    this._logger.warn(
                             String.format("Artifact vulnerabilities violate the security risk threshold LOW " +
                                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType,
                                     artifactId.Name,
@@ -205,7 +205,7 @@ public class ArtifactRisksFiller {
                 break;
             case MEDIUM:
                 if (Integer.parseInt(mediumRisk) > 0 || Integer.parseInt(highRisk) > 0) {
-                    this._logger.info(
+                    this._logger.warn(
                             String.format("Artifact vulnerabilities violate the security risk threshold MEDIUM " +
                                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType,
                                     artifactId.Name,
@@ -215,7 +215,7 @@ public class ArtifactRisksFiller {
                 break;
             case HIGH:
                 if (Integer.parseInt(highRisk) > 0) {
-                    this._logger.info(
+                    this._logger.warn(
                             String.format("Artifact vulnerabilities violate the security risk threshold HIGH " +
                                             "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType,
                                     artifactId.Name,
@@ -235,7 +235,7 @@ public class ArtifactRisksFiller {
         double cvssScore = Double.parseDouble(score);
 
         if (cvssScore > configScore) {
-            this._logger.info(
+            this._logger.warn(
                     String.format("Artifact vulnerabilities violate the security risk threshold cvss core: %f  " +
                                     "PackageType: %s, Name: %s, Version: %s", configScore, artifactId.PackageType,
                             artifactId.Name,

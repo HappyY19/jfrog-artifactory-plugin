@@ -91,7 +91,7 @@ public class ArtifactIdBuilder {
                     regex = "(?<name>.*?)\\/@v\\/(?<version>.*)";
                     return this.parseRepoPath(path, packageManager, regex);
                 default:
-                    this._logger.info(String.format("Trying to parse RepoPath through regex but packageType " +
+                    this._logger.debug(String.format("Trying to parse RepoPath through regex but packageType " +
                             "is not supported. PackageType: %s, Artifact Name: %s",
                             packageManager.packageType(),
                             repoPath.getName()));
