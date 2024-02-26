@@ -1,0 +1,3 @@
+packageName,packageVersion,cvssScore
+log4j-core,2.12.0,10.0
+jetty-ajp,7.0.2.v20100331,10.0
