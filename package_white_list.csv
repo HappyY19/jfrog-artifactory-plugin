@@ -1,3 +1,13 @@
 packageName,packageVersion,cvssScore
-log4j-core,2.12.0,10.0
-jetty-ajp,7.0.2.v20100331,10.0
+jackson-databind,2.16.1,10
+jackson-databind,2.16.0,10
+jackson-databind,2.16.0-rc1,10
+spring-cloud-gateway-core,2.2.10.RELEASE,10
+spring-cloud-gateway-core,2.2.9.RELEASE,10
+spring-cloud-gateway-core,2.2.8.RELEASE,10
+spring-cloud-gateway-server,4.1.1,10
+spring-cloud-gateway-server,4.1.0,10
+spring-cloud-gateway-server,4.0.9,10
+jackson-databind,*,10
+spring-cloud-gateway-core,*,10
+spring-cloud-gateway-server,*,10
