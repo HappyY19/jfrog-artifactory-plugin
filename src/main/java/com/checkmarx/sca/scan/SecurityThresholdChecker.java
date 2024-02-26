@@ -40,7 +40,7 @@ public class SecurityThresholdChecker {
         String packageName = names[0];
         String packageVersion = names[1];
 
-        if (inPackagesWitheList(packageName, packageVersion)) {
+        if (inPackagesWhiteList(packageName, packageVersion)) {
             return;
         }
 
@@ -187,7 +187,8 @@ public class SecurityThresholdChecker {
     }
 
 
-    private boolean inPackagesWitheList(String packageName, String packageVersion){
+    private boolean inPackagesWhiteList(String packageName, String packageVersion){
+        this._logger.debug(String.format("inPackagesWhiteList, packageName: %s, packageVersion: %s", packageName, packageVersion));
         List<PackageInfo> packagesInWhiteList = this._packageWhiteList
                 .stream()
                 .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
@@ -195,6 +196,7 @@ public class SecurityThresholdChecker {
                                 || packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion))
                 )
                 .collect(Collectors.toList());
+
         return !packagesInWhiteList.isEmpty();
     }
 

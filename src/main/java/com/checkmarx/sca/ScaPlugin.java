@@ -22,6 +22,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.*;
 import javax.annotation.Nonnull;
 
@@ -40,7 +41,7 @@ public class ScaPlugin {
     private final Repositories _repositories;
 
     public ScaPlugin(@Nonnull Logger logger, @Nonnull File pluginsDirectory, @Nonnull Repositories repositories)
-            throws IOException {
+            throws IOException, URISyntaxException {
         this._logger = logger;
 
         try {
@@ -49,12 +50,13 @@ public class ScaPlugin {
             AccessControlClient accessControlClient = this.tryToAuthenticate(configuration, logger);
             this._repositories = repositories;
             ArtifactRisksFiller risksFiller = new ArtifactRisksFiller(repositories);
-            String packageBlacklistCsvPath = configuration.getPropertyOrDefault(
-                    ConfigurationEntry.PACKAGE_BLACKLIST_CSV_PATH);
-            String packageWhitelistCsvPath = configuration.getPropertyOrDefault(
-                    ConfigurationEntry.PACKAGE_WHITELIST_CSV_PATH);
-            ArrayList<PackageInfo> packageBlackList = this.getPackagesList(packageBlacklistCsvPath);
-            ArrayList<PackageInfo> packageWhiteList = this.getPackagesList(packageWhitelistCsvPath);
+
+            File tempFile = new File(ScaPlugin.class.getProtectionDomain().getCodeSource().getLocation()
+                    .toURI());
+            String filePath = tempFile.getParentFile().getPath();
+            this._logger.debug(String.format("file path: %s", filePath));
+            ArrayList<PackageInfo> packageBlackList = this.getPackagesList(filePath + "/package_black_list.csv");
+            ArrayList<PackageInfo> packageWhiteList = this.getPackagesList(filePath + "/package_white_list.csv");
             SecurityThresholdChecker securityThresholdChecker = new SecurityThresholdChecker(repositories,
                     packageBlackList, packageWhiteList);
             LicenseAllowanceChecker licenseAllowanceChecker = new LicenseAllowanceChecker(repositories);
@@ -71,17 +73,21 @@ public class ScaPlugin {
 
     private ArrayList<PackageInfo> getPackagesList(String packageBlacklistCsvPath) {
         ArrayList<PackageInfo> result = new ArrayList<>();
+        File csvFile = new File(packageBlacklistCsvPath);
         CsvMapper csvMapper = new CsvMapper();
-        ObjectReader oReader = csvMapper.readerWithSchemaFor(PackageInfo.class);
-        try (FileReader reader = new FileReader(packageBlacklistCsvPath)) {
-            MappingIterator<PackageInfo> mi = oReader.readValues(reader);
+        CsvSchema schema = CsvSchema.emptySchema().withHeader();
+        ObjectReader oReader  = csvMapper.readerFor(PackageInfo.class).with(schema);
+
+        try (MappingIterator<PackageInfo> mi = oReader.readValues(csvFile)) {
             while (mi.hasNext()) {
                 PackageInfo current = mi.next();
                 result.add(current);
+                this._logger.debug(current.toString());
             }
         }catch (Exception e){
             this._logger.error(String.format("Error during read csv file, %s", e));
         }
+        this._logger.debug(String.format("number of result: %d", result.size()));
         return result;
     }
 
@@ -183,9 +189,11 @@ public class ScaPlugin {
                     .getInstance(SecurityThresholdChecker.class);
             thresholdChecker.checkSecurityRiskThreshold(repoPath, nonVirtualRepoPaths);
         } catch (CancelException var4) {
+            String scoreStr = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
             this._logger.warn(
-                    String.format("The download was blocked by security threshold configuration. Artifact Name: %s",
-                            repoPath.getName()));
+                    String.format("The download was blocked by security threshold configuration. " +
+                                    "Artifact path: %s, CVSS Score: %s",
+                            repoPath.getPath(), scoreStr));
             throw var4;
         } catch (Exception var5) {
             this._logger.error(

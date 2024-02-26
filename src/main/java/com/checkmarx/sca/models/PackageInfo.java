@@ -2,6 +2,7 @@ package com.checkmarx.sca.models;
 
 public class PackageInfo {
 
+    private String packageManager;
     private String packageName;
 
     private String packageVersion;
@@ -12,10 +13,19 @@ public class PackageInfo {
 
     }
 
-    public PackageInfo(String packageName, String packageVersion, Double cvssScore) {
+    public PackageInfo(String packageManager, String packageName, String packageVersion, Double cvssScore) {
+        this.packageManager = packageManager;
         this.packageName = packageName;
         this.packageVersion = packageVersion;
         this.cvssScore = cvssScore;
+    }
+
+    public String getPackageManager() {
+        return this.packageManager;
+    }
+
+    public void setPackageManager(String packageManager) {
+        this.packageManager = packageManager;
     }
 
     public void setPackageName(String packageName) {
@@ -23,7 +33,12 @@ public class PackageInfo {
     }
 
     public String getPackageName() {
-        return this.packageName;
+        String[] names = this.packageName.split(":");
+        if (names.length > 1) {
+            return names[1];
+        } else {
+            return names[0];
+        }
     }
 
     public void setPackageVersion(String packageVersion) {
@@ -44,7 +59,8 @@ public class PackageInfo {
 
     @Override
     public String toString() {
-        return "PackageInfo [packageName=" + this.packageName + ", packageVersion=" + this.packageVersion + ", cvssScore="
+        return "PackageInfo [packageManager=" + this.packageManager + ", packageName=" + this.packageName
+                + ", packageVersion=" + this.packageVersion + ", cvssScore="
                 + this.cvssScore.toString() + "]";
     }
 
