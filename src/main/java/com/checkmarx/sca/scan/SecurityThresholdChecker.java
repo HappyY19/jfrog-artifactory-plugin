@@ -191,7 +191,8 @@ public class SecurityThresholdChecker {
         List<PackageInfo> packagesInWhiteList = this._packageWhiteList
                 .stream()
                 .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
-                        && packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion)
+                        && (packageInfo.getPackageVersion().equalsIgnoreCase("*")
+                                || packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion))
                 )
                 .collect(Collectors.toList());
         return !packagesInWhiteList.isEmpty();
@@ -201,7 +202,8 @@ public class SecurityThresholdChecker {
         List<PackageInfo> packagesList = this._packageBlackList
                 .stream()
                 .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
-                        && packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion)
+                        && (packageInfo.getPackageVersion().equalsIgnoreCase("*")
+                        || packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion))
                         && (score >= packageInfo.getCvssScore())
                 )
                 .collect(Collectors.toList());
