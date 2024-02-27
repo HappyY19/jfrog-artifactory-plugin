@@ -160,14 +160,12 @@ public class SecurityThresholdChecker {
         String packageName = names[0];
         String packageVersion = names[1];
 
-        if (this._packageBlackList.isEmpty()) {
-            if (score >= scoreConfigured) {
-                throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
-            }
-        } else {
-            if (score >= scoreConfigured || scoreBiggerThanOrEqualToBlackListScore(packageName, packageVersion, score)) {
-                throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
-            }
+        if (score >= scoreConfigured) {
+            throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
+        }
+
+        if (scoreBiggerThanOrEqualToBlackListScore(packageName, packageVersion, score)) {
+            throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
@@ -209,7 +207,19 @@ public class SecurityThresholdChecker {
                         && (score >= packageInfo.getCvssScore())
                 )
                 .collect(Collectors.toList());
-        return !packagesList.isEmpty();
+        boolean violateBlacklist = !packagesList.isEmpty();
+        if (violateBlacklist) {
+            PackageInfo packageInfo = packagesList.get(0);
+            Boolean isMonitored = packageInfo.getMonitored();
+            if (isMonitored) {
+                this._logger.warn(String.format("This package violate threshold configuration, packagename: %s, " +
+                        "packageversion: %s, score: %s", packageName, packageVersion, score));
+                return false;
+            } else {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

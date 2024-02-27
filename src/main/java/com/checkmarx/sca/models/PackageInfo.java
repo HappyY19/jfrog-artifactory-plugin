@@ -9,15 +9,18 @@ public class PackageInfo {
 
     private Double cvssScore;
 
+    private Boolean monitored;
+
     public PackageInfo( ) {
 
     }
 
-    public PackageInfo(String packageManager, String packageName, String packageVersion, Double cvssScore) {
+    public PackageInfo(String packageManager, String packageName, String packageVersion, Double cvssScore, Boolean monitored) {
         this.packageManager = packageManager;
         this.packageName = packageName;
         this.packageVersion = packageVersion;
         this.cvssScore = cvssScore;
+        this.monitored = monitored;
     }
 
     public String getPackageManager() {
@@ -57,11 +60,19 @@ public class PackageInfo {
         return this.cvssScore;
     }
 
+    public void setMonitored(Boolean monitored) {
+        this.monitored = monitored;
+    }
+
+    public Boolean getMonitored() {
+        return monitored;
+    }
+
     @Override
     public String toString() {
         return "PackageInfo [packageManager=" + this.packageManager + ", packageName=" + this.packageName
                 + ", packageVersion=" + this.packageVersion + ", cvssScore="
-                + this.cvssScore.toString() + "]";
+                + this.cvssScore.toString() + ", isMonitored=" + monitored.toString() + "]";
     }
 
 }

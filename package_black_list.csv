@@ -1,1 +1,7 @@
-packageManager,packageName,packageVersion,cvssScore
+packageManager,packageName,packageVersion,cvssScore,monitored
+maven,com.xuxueli:xxl-job-core,*,10,true
+maven,org.apache.logging.log4j:log4j-core,*,10,false
+maven,org.apache.commons:commons-configuration2,*,10,true
+npm,ssh2,*,10,true
+npm,vm2,*,10,true
+npm,url-parse,*,10,true

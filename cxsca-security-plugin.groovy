@@ -5,6 +5,7 @@ import org.artifactory.repo.RepoPath
 import org.artifactory.request.Request
 
 
+
 @Field ScaPlugin scaPlugin
 
 
