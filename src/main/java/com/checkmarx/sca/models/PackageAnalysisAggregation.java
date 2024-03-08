@@ -10,9 +10,6 @@ public class PackageAnalysisAggregation {
     @SerializedName("packageLicenses")
     private List<String> _licenses;
 
-    public PackageAnalysisAggregation() {
-    }
-
     public VulnerabilitiesAggregation getVulnerabilitiesAggregation() {
         return this._vulnerabilitiesAggregation;
     }

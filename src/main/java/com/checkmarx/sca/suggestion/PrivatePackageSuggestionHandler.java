@@ -36,27 +36,21 @@ public class PrivatePackageSuggestionHandler {
         this._noAuthConfiguration = !hasAuthConfiguration;
     }
 
-    public void suggestPrivatePackage(@Nonnull RepoPath repoPath,
-                                      @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) throws CancelException {
+    public void suggestPrivatePackage(@Nonnull RepoPath repoPath, @Nonnull ArrayList nonVirtualRepoPaths) throws CancelException {
         if (!this._noAuthConfiguration) {
-            boolean isSuggested = this._repositories
-                    .hasProperty(repoPath, "CxSCA.PrivatePackageSuggested");
+            boolean isSuggested = this._repositories.hasProperty(repoPath, "CxSCA.PrivatePackageSuggested");
             if (!isSuggested) {
                 if (nonVirtualRepoPaths.contains(repoPath)) {
                     String repositoryKey = repoPath.getRepoKey();
-                    RepositoryConfiguration repoConfiguration = this._repositories
-                            .getRepositoryConfiguration(repositoryKey);
+                    RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
 
                     try {
                         String packageType = repoConfiguration.getPackageType();
                         PackageManager packageManager = PackageManager.GetPackageType(packageType);
                         FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
-                        ArtifactId artifactId = this._artifactIdBuilder
-                                .getArtifactId(fileLayoutInfo, repoPath, packageManager);
+                        ArtifactId artifactId = this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
                         if (artifactId.isInvalid()) {
-                            this._logger.error(String.format("The artifact id was not built correctly. " +
-                                    "PackageType: %s, Name: %s, Version: %s",
-                                    artifactId.PackageType, artifactId.Name, artifactId.Version));
+                            this._logger.error(String.format("The artifact id was not built correctly. PackageType: %s, Name: %s, Version: %s", artifactId.PackageType, artifactId.Name, artifactId.Version));
                             return;
                         }
 
@@ -65,8 +59,7 @@ public class PrivatePackageSuggestionHandler {
                             this._logger.info("Failed to mark the package as suggested.");
                         }
                     } catch (Exception var11) {
-                        this._logger.error(String.format("Exception Message: %s. Artifact Name: %s.",
-                                var11.getMessage(), repoPath.getName()), var11);
+                        this._logger.error(String.format("Exception Message: %s. Artifact Name: %s.", var11.getMessage(), repoPath.getName()), var11);
                     }
 
                 }
@@ -77,7 +70,7 @@ public class PrivatePackageSuggestionHandler {
     private Boolean performSuggestion(ArtifactId artifactId) {
         try {
             Boolean output = this._scaHttpClient.suggestPrivatePackage(artifactId);
-            this._logger.debug("The package was suggested as potential private.");
+            this._logger.info("The package was suggested as potential private.");
             return output;
         } catch (UnexpectedResponseCodeException | InterruptedException | ExecutionException var3) {
             this._logger.warn("Failed to publish private package suggestion", var3);
@@ -86,8 +79,7 @@ public class PrivatePackageSuggestionHandler {
     }
 
     private boolean markResourceAsSuggested(RepoPath repoPath) {
-        Properties props = this._repositories
-                .setProperty(repoPath, "CxSCA.PrivatePackageSuggested", new String[]{"true"});
+        Properties props = this._repositories.setProperty(repoPath, "CxSCA.PrivatePackageSuggested", new String[]{"true"});
         return props.containsKey("CxSCA.PrivatePackageSuggested");
     }
 }

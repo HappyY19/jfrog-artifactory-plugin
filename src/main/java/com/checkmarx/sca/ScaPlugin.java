@@ -23,16 +23,16 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.*;
+import java.util.List;
+import java.util.ArrayList;
 import javax.annotation.Nonnull;
 
 import org.artifactory.exception.CancelException;
 import org.artifactory.fs.FileLayoutInfo;
 import org.artifactory.repo.RepoPath;
-import org.artifactory.repo.RepoPathFactory;
+
 import org.artifactory.repo.Repositories;
-import org.artifactory.repo.RepositoryConfiguration;
-import org.artifactory.repo.VirtualRepositoryConfiguration;
+
 import org.slf4j.Logger;
 
 public class ScaPlugin {
@@ -76,7 +76,7 @@ public class ScaPlugin {
         File csvFile = new File(packageBlacklistCsvPath);
         CsvMapper csvMapper = new CsvMapper();
         CsvSchema schema = CsvSchema.emptySchema().withHeader();
-        ObjectReader oReader  = csvMapper.readerFor(PackageInfo.class).with(schema);
+        ObjectReader oReader = csvMapper.readerFor(PackageInfo.class).with(schema);
 
         try (MappingIterator<PackageInfo> mi = oReader.readValues(csvFile)) {
             while (mi.hasNext()) {
@@ -84,7 +84,7 @@ public class ScaPlugin {
                 result.add(current);
                 this._logger.debug(current.toString());
             }
-        }catch (Exception e){
+        } catch (Exception e) {
             this._logger.error(String.format("Error during read csv file, %s", e));
         }
         this._logger.debug(String.format("number of result: %d", result.size()));
@@ -135,11 +135,6 @@ public class ScaPlugin {
     public void beforeDownload(RepoPath repoPath, boolean disableBlock) {
         ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
         boolean riskAddedSuccessfully = this.addPackageRisks(repoPath, nonVirtualRepoPaths);
-//        boolean repoInBlockRepoList = this.isRepoInBlockList(repoPath);
-//        this._logger.debug(
-//                String.format("before download, check threshold softBlock: %b, repoInBlockRepoList: %b, " +
-//                                "riskAddedSuccessfully: %b",
-//                        softBlock, repoInBlockRepoList, riskAddedSuccessfully));
         if (!disableBlock && riskAddedSuccessfully) {
             this.checkRiskThreshold(repoPath, nonVirtualRepoPaths);
             this.checkLicenseAllowance(repoPath, nonVirtualRepoPaths);
@@ -158,7 +153,6 @@ public class ScaPlugin {
                 .getInstance(ArtifactRisksFiller.class);
         return artifactChecker.getNonVirtualRepoPaths(repoPath);
     }
-
 
     private boolean addPackageRisks(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths) {
         return this.addPackageRisks(repoPath, nonVirtualRepoPaths, false);
@@ -217,25 +211,6 @@ public class ScaPlugin {
                     "for the Artifact: %s.\nException: %s", repoPath.getName(), var5));
         }
 
-    }
-
-    private boolean isRepoInBlockList(@Nonnull RepoPath repoPath) {
-        String repoKey = repoPath.getRepoKey();
-        PluginConfiguration pluginConfiguration = (PluginConfiguration) this._injector.getInstance(
-                PluginConfiguration.class);
-
-        String scaSecurityBlockRepositoryKeys = pluginConfiguration.getScaSecurityBlockRepositoryKeys();
-        this._logger.debug(String.format("block repo keys: %s", scaSecurityBlockRepositoryKeys));
-        if (scaSecurityBlockRepositoryKeys == null) {
-            return false;
-        }
-
-        String[] keys = scaSecurityBlockRepositoryKeys.split(",");
-        if (Arrays.asList(keys).contains(repoKey)) {
-            this._logger.debug("repo key in block list, the artifact will be check against threshold");
-            return true;
-        }
-        return false;
     }
 
     public void scanArtifactsConcurrently(@Nonnull List<RepoPath> repoPaths, boolean forceScan) {

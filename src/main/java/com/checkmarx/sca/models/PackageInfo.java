@@ -11,7 +11,7 @@ public class PackageInfo {
 
     private Boolean monitored;
 
-    public PackageInfo( ) {
+    public PackageInfo() {
 
     }
 

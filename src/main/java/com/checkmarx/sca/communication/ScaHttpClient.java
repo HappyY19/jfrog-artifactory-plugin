@@ -25,16 +25,27 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Objects;
+import java.util.Iterator;
+import java.util.stream.Collectors;
+import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
+import java.util.MissingResourceException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import javax.annotation.Nonnull;
+import java.time.Duration;
 
 import org.artifactory.exception.CancelException;
-import org.artifactory.repo.RepoPath;
 import org.jetbrains.annotations.NotNull;
+import org.artifactory.repo.RepoPath;
 import org.slf4j.Logger;
 
 public class ScaHttpClient {
@@ -49,6 +60,17 @@ public class ScaHttpClient {
     )
     private AccessControlClient _accessControlClient;
     private Logger _logger;
+    private final String RiskAggregationAPI = "public/risk-aggregation/aggregated-risks";
+    private final String LicenseAPI = "public/packages/%s/%s/versions/%s/licenses";
+    private final String ArtifactInfoAPI = "public/packages/%s/%s/versions/%s";
+    private final String SuggestPrivatePackageAPI = "private-dependencies-repository/dependencies";
+    private static final ExecutorService executorService = Executors.newFixedThreadPool(10);
+
+    private static final HttpClient httpClient = HttpClient.newBuilder()
+            .executor(executorService)
+            .version(HttpClient.Version.HTTP_2)
+            .connectTimeout(Duration.ofSeconds(120))
+            .build();
 
     @Inject
     public ScaHttpClient(@Nonnull PluginConfiguration configuration) {
@@ -66,30 +88,37 @@ public class ScaHttpClient {
         repoPathHttpResponseMap.forEach((key, value) -> {
             if (200 != value.statusCode()) {
                 this._logger.error(
-                    String.format("Action, %s. " +
-                                    "Repopath, %s. " +
-                                    "Response, status code: %s, response body: %s",
-                        action,
-                        key.getPath(),
-                        value.statusCode(),
-                        value.body()
-                    )
+                        String.format("Action, %s. " +
+                                        "Repopath, %s. " +
+                                        "Response, status code: %s, response body: %s",
+                                action,
+                                key.getPath(),
+                                value.statusCode(),
+                                value.body()
+                        )
                 );
             }
         });
     }
 
     private List<HttpResponse<String>> processConcurrentRequests(List<HttpRequest> requests) {
+        List<HttpResponse<String>> responses = new ArrayList<>();
         this._logger.debug("processConcurrentRequests, begin to send HTTP requests asynchronously.");
-        List<CompletableFuture<HttpResponse<String>>> responseList = requests.stream()
-                .map(request -> this._httpClient.sendAsync(request, BodyHandlers.ofString()))
-                .collect(Collectors.toList());
-        this._logger.debug("HTTP requests send finished.");
-        CompletableFuture.allOf(responseList.toArray(CompletableFuture<?>[]::new)).join();
-        this._logger.debug("Waiting for all CompletableFuture to join, and get response value");
-        return responseList.stream()
-                .map(CompletableFuture::join)
-                .collect(Collectors.toList());
+        try {
+            List<CompletableFuture<HttpResponse<String>>> responseList = requests.stream()
+                    .map(request -> httpClient.sendAsync(request, BodyHandlers.ofString()))
+                    .collect(Collectors.toList());
+            this._logger.debug("HTTP requests send finished.");
+            responses = responseList.stream()
+                    .map(CompletableFuture::join)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            this._logger.debug("All HTTP requests completed.");
+
+        } catch (Exception e) {
+            this._logger.error(String.format("Fail to processConcurrentRequests: %s", e.getMessage()));
+        }
+        return responses;
     }
 
     private List<HttpResponse<String>> concurrentGetRequests(List<URI> uris) {
@@ -119,7 +148,7 @@ public class ScaHttpClient {
     }
 
     private Map<RepoPath, HttpResponse<String>> zipToMap(List<RepoPath> keys, List<HttpResponse<String>> values) {
-        return IntStream.range(0, keys.size()).boxed()
+        return IntStream.range(0, keys.size() - 1).boxed()
                 .collect(Collectors.toMap(keys::get, values::get));
     }
 
@@ -130,18 +159,18 @@ public class ScaHttpClient {
                     this._logger.debug(String.format("building URIs by using Artifacts, Package Type: %s, Name: %s, " +
                             "Version: %s", artifactId.PackageType, artifactId.Name, artifactId.Version));
                     return URI.create(
-                        String.format("%s%s",
-                            this._apiUrl,
-                            String.format("public/packages/%s/%s/%s", artifactId.PackageType,
-                                URLEncoder.encode(artifactId.Name, StandardCharsets.UTF_8),
-                                URLEncoder.encode(artifactId.Version, StandardCharsets.UTF_8)
+                            String.format("%s%s",
+                                    this._apiUrl,
+                                    String.format(this.ArtifactInfoAPI, artifactId.PackageType,
+                                            URLEncoder.encode(artifactId.Name, StandardCharsets.UTF_8),
+                                            URLEncoder.encode(artifactId.Version, StandardCharsets.UTF_8)
+                                    )
                             )
-                        )
                     );
                 })
                 .collect(Collectors.toList());
         List<HttpResponse<String>> responses = concurrentGetRequests(uris);
-        this._logger.debug("Finish sending");
+        this._logger.debug("zip two list to map");
         Map<RepoPath, HttpResponse<String>> artifactIdHttpResponseMap = this.zipToMap(
                 new ArrayList<>(repoPathArtifactIdMap.keySet()),
                 responses);
@@ -150,20 +179,21 @@ public class ScaHttpClient {
         return artifactIdHttpResponseMap.entrySet().stream()
                 .filter(e -> e.getValue().statusCode() == 200)
                 .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> {
-                        String body = e.getValue().body();
-                        body = body.replaceAll("\\{\"identifier\":", "").replaceFirst("}", "");
-                        return (ArtifactInfo) (new Gson()).fromJson(body, ArtifactInfo.class);
-                    }
+                        Map.Entry::getKey,
+                        e -> {
+                            String body = e.getValue().body();
+                            return (ArtifactInfo) (new Gson()).fromJson(body, ArtifactInfo.class);
+                        }
                 ));
     }
 
     public Map<RepoPath, PackageAnalysisAggregation> getRiskAggregationConcurrently(Map<RepoPath, ArtifactId> repoPathArtifactIdMap) {
         this._logger.debug("ScaHttpClient getRiskAggregationConcurrently start");
         URI uri = URI.create(
-                String.format("%s%s", this._apiUrl, "public/risk-aggregation/aggregated-risks"));
-        List<String> bodies = repoPathArtifactIdMap.values().stream()
+                String.format("%s%s", this._apiUrl, this.RiskAggregationAPI));
+        List<String> bodies = repoPathArtifactIdMap
+                .values()
+                .stream()
                 .map(artifactId -> String.format("{\"packageName\":\"%s\",\"version\":\"%s\",\"packageManager\":\"%s\"}",
                         artifactId.Name, artifactId.Version, artifactId.PackageType))
                 .collect(Collectors.toList());
@@ -176,23 +206,26 @@ public class ScaHttpClient {
         Map<RepoPath, PackageAnalysisAggregation> result = artifactIdHttpResponseMap.entrySet().stream()
                 .filter(e -> e.getValue().statusCode() == 200)
                 .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> {
-                        Type listType = (new TypeToken<PackageAnalysisAggregation>() {}).getType();
-                        return (PackageAnalysisAggregation) (new Gson()).fromJson((String) e.getValue().body(), listType);
-                    }
+                        Map.Entry::getKey,
+                        e -> {
+                            return (PackageAnalysisAggregation) (new Gson())
+                                    .fromJson((String) e.getValue().body(), PackageAnalysisAggregation.class);
+                        }
                 ));
-        Map<RepoPath,PackageLicensesModel> licensesModelMap = getPackageLicenseConcurrently(repoPathArtifactIdMap);
+        Map<RepoPath, PackageLicensesModel> licensesModelMap = getPackageLicenseConcurrently(repoPathArtifactIdMap);
         this._logger.debug("ScaHttpClient getRiskAggregationConcurrently end");
         this._logger.debug("combine each PackageAnalysisAggregation value and  PackageLicensesModel value");
-        return result.entrySet().stream()
+        return result
+                .entrySet()
+                .stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         e -> {
                             PackageAnalysisAggregation packageAnalysisAggregation = e.getValue();
                             PackageLicensesModel packageLicensesModel = licensesModelMap.get(e.getKey());
-                            if (packageLicensesModel.getIdentifiedLicenses() != null
-                                    && !packageLicensesModel.getIdentifiedLicenses().isEmpty()) {
+                            if (packageLicensesModel != null
+                                && packageLicensesModel.getIdentifiedLicenses() != null
+                                && !packageLicensesModel.getIdentifiedLicenses().isEmpty()) {
                                 List<String> licenses = packageLicensesModel
                                         .getIdentifiedLicenses()
                                         .stream()
@@ -209,36 +242,37 @@ public class ScaHttpClient {
 
     public Map<RepoPath, PackageLicensesModel> getPackageLicenseConcurrently(Map<RepoPath, ArtifactId> repoPathArtifactIdMap) {
         this._logger.debug("ScaHttpClient getPackageLicenseConcurrently start");
-        List<URI> uris = repoPathArtifactIdMap.values().stream()
-            .map(artifactId ->
-                URI.create(
-                    String.format("%s%s",
-                        this._apiUrl,
-                        String.format("public/packages/%s/%s/versions/%s/licenses",
-                                artifactId.PackageType,
-                                URLEncoder.encode(artifactId.Name, StandardCharsets.UTF_8),
-                                URLEncoder.encode(artifactId.Version, StandardCharsets.UTF_8)
+        List<URI> uris = repoPathArtifactIdMap
+                .values()
+                .stream()
+                .map(artifactId ->
+                        URI.create(
+                                String.format("%s%s",
+                                        this._apiUrl,
+                                        String.format(this.LicenseAPI,
+                                                artifactId.PackageType,
+                                                URLEncoder.encode(artifactId.Name, StandardCharsets.UTF_8),
+                                                URLEncoder.encode(artifactId.Version, StandardCharsets.UTF_8)
+                                        )
+                                )
                         )
-                    )
                 )
-            )
-            .collect(Collectors.toList());
+                .collect(Collectors.toList());
         List<HttpResponse<String>> responses = concurrentGetRequests(uris);
         Map<RepoPath, HttpResponse<String>> artifactIdHttpResponseMap = this.zipToMap(
-            new ArrayList<>(repoPathArtifactIdMap.keySet()),
-            responses
+                new ArrayList<>(repoPathArtifactIdMap.keySet()),
+                responses
         );
         logErrorResponse("getPackageLicenseConcurrently", artifactIdHttpResponseMap);
         this._logger.debug("ScaHttpClient getPackageLicenseConcurrently end,  return value with response which status code is 200");
         return artifactIdHttpResponseMap.entrySet().stream()
-            .filter(e -> e.getValue().statusCode() == 200)
-            .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                e -> {
-                    Type listType = (new TypeToken<PackageLicensesModel>() {}).getType();
-                    return (PackageLicensesModel) (new Gson()).fromJson((String) e.getValue().body(), listType);
-                }
-            ));
+                .filter(e -> e.getValue().statusCode() == 200)
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> {
+                            return (PackageLicensesModel) (new Gson()).fromJson((String) e.getValue().body(), PackageLicensesModel.class);
+                        }
+                ));
     }
 
     public ArtifactInfo getArtifactInformation(String packageType, String name, String version)
@@ -253,10 +287,7 @@ public class ScaHttpClient {
         } else {
             ArtifactInfo artifactInfo;
             try {
-                String body = artifactResponse.body();
-                body = body.replaceAll("\\{\"identifier\":", "").replaceFirst("}", "");
-                artifactInfo = (ArtifactInfo) (new Gson()).fromJson(body,
-                        ArtifactInfo.class);
+                artifactInfo = (ArtifactInfo) (new Gson()).fromJson((String) artifactResponse.body(), ArtifactInfo.class);
             } catch (Exception var7) {
                 throw new UnexpectedResponseBodyException((String) artifactResponse.body());
             }
@@ -275,15 +306,14 @@ public class ScaHttpClient {
         CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
                 .sendAsync(request, BodyHandlers.ofString());
         HttpResponse<String> risksResponse = responseFuture.get();
+        this._logger.debug(String.format("getRiskAggregationOfArtifact http status code: %s", risksResponse.statusCode()));
         if (risksResponse.statusCode() != 200) {
             throw new UnexpectedResponseCodeException(risksResponse.statusCode());
         } else {
             PackageAnalysisAggregation packageAnalysisAggregation;
             try {
-                Type listType = (new TypeToken<PackageAnalysisAggregation>() {
-                }).getType();
                 packageAnalysisAggregation = (PackageAnalysisAggregation) (
-                        new Gson()).fromJson((String) risksResponse.body(), listType);
+                        new Gson()).fromJson((String) risksResponse.body(), PackageAnalysisAggregation.class);
             } catch (Exception var11) {
                 throw new UnexpectedResponseBodyException((String) risksResponse.body());
             }
@@ -296,9 +326,10 @@ public class ScaHttpClient {
                 try {
                     PackageLicensesModel license = this.getPackageLicenseOfArtifact(packageType, name, version);
                     if (license.getIdentifiedLicenses() != null && !license.getIdentifiedLicenses().isEmpty()) {
-                        licenses = license.getIdentifiedLicenses().stream().map((identifiedLicense) -> {
-                            return identifiedLicense.getLicense().getName();
-                        }).collect(Collectors.toList());
+                        licenses = license.getIdentifiedLicenses()
+                                .stream()
+                                .map((identifiedLicense) -> identifiedLicense.getLicense().getName())
+                                .collect(Collectors.toList());
                     }
                 } catch (Exception var10) {
                     licenses = List.of();
@@ -327,8 +358,7 @@ public class ScaHttpClient {
             throws CancelException {
         String body = String.format("{\"packageName\":\"%s\",\"version\":\"%s\",\"packageManager\":\"%s\"}",
                 name, version, packageType);
-        return HttpRequest.newBuilder(URI.create(
-                String.format("%s%s", this._apiUrl, "public/risk-aggregation/aggregated-risks")))
+        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, this.RiskAggregationAPI)))
                 .header("content-type", "application/json")
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                         "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
@@ -343,11 +373,10 @@ public class ScaHttpClient {
             @NotNull String version) throws CancelException {
         name = URLEncoder.encode(name, StandardCharsets.UTF_8);
         version = URLEncoder.encode(version, StandardCharsets.UTF_8);
-        String url = String.format("public/packages/%s/%s/versions/%s/licenses", packageType, name, version);
-        return HttpRequest.newBuilder(
-                URI.create(String.format("%s%s", this._apiUrl, url)))
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
+        String url = String.format(this.LicenseAPI, packageType, name, version);
+        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, url)))
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML," +
+                        " like Gecko) Chrome/100.0.4896.92 Safari/537.36")
                 .header("cxorigin", this.getCxOrigin())
                 .GET()
                 .build();
@@ -359,9 +388,8 @@ public class ScaHttpClient {
             @NotNull String version) {
         name = URLEncoder.encode(name, StandardCharsets.UTF_8);
         version = URLEncoder.encode(version, StandardCharsets.UTF_8);
-        String artifactPath = String.format("public/packages/%s/%s/%s", packageType, name, version);
-        return HttpRequest.newBuilder(
-                URI.create(String.format("%s%s", this._apiUrl, artifactPath)))
+        String artifactPath = String.format(this.ArtifactInfoAPI, packageType, name, version);
+        return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, artifactPath)))
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                         "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
                 .header("cxorigin", this.getCxOrigin())
@@ -378,13 +406,12 @@ public class ScaHttpClient {
         if (this._accessControlClient == null) {
             throw new UserIsNotAuthenticatedException();
         } else {
-            AuthenticationHeader<String, String> authHeader = this._accessControlClient.GetAuthorizationHeader();
-            return HttpRequest.newBuilder(
-                    URI.create(String.format("%s%s", this._apiUrl, "private-dependencies-repository/dependencies")))
+            AuthenticationHeader authHeader = this._accessControlClient.GetAuthorizationHeader();
+            return HttpRequest.newBuilder(URI.create(String.format("%s%s", this._apiUrl, this.SuggestPrivatePackageAPI)))
                     .header((String) authHeader.getKey(), (String) authHeader.getValue())
                     .header("content-type", "application/json")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                            "(KHTML, like Gecko) Chrome/100.0.4896.92 Safari/537.36")
                     .header("cxorigin", this.getCxOrigin())
                     .POST(BodyPublishers.ofString(body))
                     .build();

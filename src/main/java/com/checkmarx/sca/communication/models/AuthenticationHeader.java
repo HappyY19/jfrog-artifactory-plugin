@@ -1,19 +1,19 @@
 package com.checkmarx.sca.communication.models;
 
-public class AuthenticationHeader<K, V> {
-    private final K _key;
-    private final V _value;
+public class AuthenticationHeader {
+    private final Object _key;
+    private final Object _value;
 
-    public AuthenticationHeader(K key, V value) {
+    public AuthenticationHeader(Object key, Object value) {
         this._key = key;
         this._value = value;
     }
 
-    public K getKey() {
+    public Object getKey() {
         return this._key;
     }
 
-    public V getValue() {
+    public Object getValue() {
         return this._value;
     }
 }

@@ -39,17 +39,17 @@ public class ComposerFallback {
             return null;
         } else {
             try {
-                HttpRequest request = HttpRequest.newBuilder(
-                        URI.create(String.format("%s/search.json?q=%s", this._baseUrl, arrOfStr[1]))).GET().build();
-                CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
-                        .sendAsync(request, BodyHandlers.ofString());
-                HttpResponse<String> response = (HttpResponse) responseFuture.get();
+                HttpRequest request = HttpRequest.newBuilder(URI.create(String.format("%s/search.json?q=%s", this._baseUrl, arrOfStr[1]))).GET().build();
+                CompletableFuture responseFuture = this._httpClient.sendAsync(request, BodyHandlers.ofString());
+                HttpResponse response = (HttpResponse) responseFuture.get();
                 if (response.statusCode() == 200) {
                     JsonElement jElement = JsonParser.parseString((String) response.body());
                     JsonObject jObject = jElement.getAsJsonObject();
                     JsonArray results = jObject.getAsJsonArray("results");
+                    Iterator var9 = results.iterator();
 
-                    for (JsonElement result : results) {
+                    while (var9.hasNext()) {
+                        JsonElement result = (JsonElement) var9.next();
                         JsonObject packageData = result.getAsJsonObject();
                         String repository = packageData.get("repository").getAsString();
                         if (repository != null && repository.contains(name)) {

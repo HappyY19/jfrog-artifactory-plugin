@@ -1,5 +1,6 @@
 package com.checkmarx.sca.scan;
 
+import com.checkmarx.sca.PackageManager;
 import com.checkmarx.sca.PropertiesConstants;
 import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.PluginConfiguration;
@@ -7,13 +8,21 @@ import com.checkmarx.sca.configuration.SecurityRiskThreshold;
 import com.checkmarx.sca.models.PackageInfo;
 import com.google.inject.Inject;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 
 import org.artifactory.exception.CancelException;
+import org.artifactory.fs.FileLayoutInfo;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.repo.Repositories;
+import org.artifactory.repo.RepositoryConfiguration;
 import org.slf4j.Logger;
 
 public class SecurityThresholdChecker {
@@ -35,12 +44,13 @@ public class SecurityThresholdChecker {
 
     public void checkSecurityRiskThreshold(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths)
             throws CancelException {
-        String packageNameVersionStr = getPackageNameVersionFromRepoPath(repoPath);
+        String packageNameVersionStr = getPackageTypeNameVersionFromRepoPath(repoPath);
         String[] names = packageNameVersionStr.split(",");
-        String packageName = names[0];
-        String packageVersion = names[1];
+        String packageType = names[0];
+        String packageName = names[1];
+        String packageVersion = names[2];
 
-        if (inPackagesWhiteList(packageName, packageVersion)) {
+        if (inPackagesWhiteList(packageType, packageName, packageVersion)) {
             return;
         }
 
@@ -56,12 +66,12 @@ public class SecurityThresholdChecker {
                 Optional<Double> securityRiskThresholdCvssScore = this._configuration
                         .getSecurityRiskThresholdCvssScore();
                 securityRiskThresholdCvssScore.ifPresentOrElse(
-                    (value) -> {
-                        this.validateSecurityRiskThresholdByCvssScore((RepoPath) nonVirtualRepoPaths.get(0), value);
-                    },
-                    ()-> {
-                        this.validateSecurityRiskThresholdFulfillment((RepoPath) nonVirtualRepoPaths.get(0));
-                    }
+                        (value) -> {
+                            this.validateSecurityRiskThresholdByCvssScore((RepoPath) nonVirtualRepoPaths.get(0), value);
+                        },
+                        () -> {
+                            this.validateSecurityRiskThresholdFulfillment((RepoPath) nonVirtualRepoPaths.get(0));
+                        }
                 );
                 return;
             }
@@ -71,7 +81,7 @@ public class SecurityThresholdChecker {
         } while (!"true".equalsIgnoreCase(ignoreThreshold));
 
         this._logger.warn(String.format("Ignoring the security risk threshold. Artifact Property \"%s\" is \"true\". " +
-                "Artifact Name: %s", PropertiesConstants.IGNORE_RISK_THRESHOLD, repoPath.getName()));
+                "Artifact Name: %s", PropertiesConstants.IGNORE_THRESHOLD, repoPath.getName()));
     }
 
     private String getIgnoreProperty(RepoPath path) {
@@ -80,7 +90,7 @@ public class SecurityThresholdChecker {
 
         for (Map.Entry<String, String> stringStringEntry : properties) {
             Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
-            if (PropertiesConstants.IGNORE_RISK_THRESHOLD.equalsIgnoreCase((String) property.getKey())) {
+            if (PropertiesConstants.IGNORE_THRESHOLD.equalsIgnoreCase((String) property.getKey())) {
                 ignoreThreshold = (String) property.getValue();
                 break;
             }
@@ -90,7 +100,7 @@ public class SecurityThresholdChecker {
     }
 
     private void validateSecurityRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        SecurityRiskThreshold securityRiskThreshold = this._configuration.getSecurityRiskThreshold();
+        SecurityRiskThreshold securityRiskThreshold = this.getSecurityRiskThreshold();
         this._logger.debug(String.format("Security risk threshold configured: %s", securityRiskThreshold));
         switch (securityRiskThreshold) {
             case LOW:
@@ -105,37 +115,42 @@ public class SecurityThresholdChecker {
 
     }
 
+    private SecurityRiskThreshold getSecurityRiskThreshold() {
+        String configuration = this._configuration.getPropertyOrDefault(ConfigurationEntry.SECURITY_RISK_THRESHOLD);
+        return SecurityRiskThreshold.valueOf(configuration.trim().toUpperCase());
+    }
+
     private void checkIfLowRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
 
-        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.TOTAL_RISKS)) {
+        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.TOTAL_RISKS_COUNT)) {
             throw new CancelException(String.format("Property CxSCA.TotalRisks missing in %s", repoPath), 403);
         }
 
-        String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS);
+        String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS_COUNT);
         if (Integer.parseInt(vulnerabilities) > 0) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
     private void checkIfMediumRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS)) {
+        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.MEDIUM_RISKS_COUNT)) {
             throw new CancelException(String.format("Property CxSCA.MediumSeverityRisks missing in %s", repoPath), 403);
         }
-        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS)) {
+        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.HIGH_RISKS_COUNT)) {
             throw new CancelException(String.format("Property CxSCA.HighSeverityRisks missing in %s", repoPath), 403);
         }
-        String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS);
-        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
+        String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_RISKS_COUNT);
+        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_RISKS_COUNT);
         if (Integer.parseInt(mediumRisk) > 0 || Integer.parseInt(highRisk) > 0) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
     private void checkIfHighRiskThresholdFulfillment(RepoPath repoPath) throws CancelException {
-        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS)) {
+        if (!this._repositories.hasProperty(repoPath, PropertiesConstants.HIGH_RISKS_COUNT)) {
             throw new CancelException(String.format("Property CxSCA.HighSeverityRisks missing in %s", repoPath), 403);
         }
-        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
+        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_RISKS_COUNT);
         if (Integer.parseInt(highRisk) > 0) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
@@ -155,53 +170,58 @@ public class SecurityThresholdChecker {
         String scoreStr = this._repositories.getProperty(repoPath, PropertiesConstants.RISK_SCORE);
         double score = Double.parseDouble(scoreStr);
 
-        String packageNameVersionStr = getPackageNameVersionFromRepoPath(repoPath);
+        String packageNameVersionStr = getPackageTypeNameVersionFromRepoPath(repoPath);
         String[] names = packageNameVersionStr.split(",");
-        String packageName = names[0];
-        String packageVersion = names[1];
+        String packageType = names[0];
+        String packageName = names[1];
+        String packageVersion = names[2];
 
         if (score >= scoreConfigured) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
 
-        if (scoreBiggerThanOrEqualToBlackListScore(packageName, packageVersion, score)) {
+        if (scoreBiggerThanOrEqualToBlackListScore(packageType, packageName, packageVersion, score)) {
             throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
         }
     }
 
-    private String getPackageNameVersionFromRepoPath(RepoPath repoPath) {
+    private String getPackageTypeNameVersionFromRepoPath(RepoPath repoPath) {
         String packageWholePath = repoPath.getPath();
         this._logger.debug(String.format("packageWholePath  %s\n", packageWholePath));
-        String[] names = packageWholePath.split("/");
-        String fileName = names[names.length - 1];
-        String[] packageNameVersionStr = fileName.split("-");
-        String[] newPackageNameVersionStr =  Arrays.copyOfRange(packageNameVersionStr, 0, packageNameVersionStr.length - 1);
-        String packageName = String.join("-", newPackageNameVersionStr);
-        String packageVersionWithFileExtension = packageNameVersionStr[packageNameVersionStr.length - 1];
-        String[] packageVersionWithFileExtensionStr = packageVersionWithFileExtension.split("\\.");
-        String[] packageVersionStr = Arrays.copyOfRange(packageVersionWithFileExtensionStr, 0, packageVersionWithFileExtensionStr.length - 1);
-        String packageVersion = String.join(".", packageVersionStr);
-        return String.format("%s,%s", packageName, packageVersion) ;
+        String repositoryKey = repoPath.getRepoKey();
+        this._logger.debug(String.format("repository key: %s.", repositoryKey));
+        RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
+        String packageType = repoConfiguration.getPackageType();
+
+        FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
+        
+        String packageVersion = fileLayoutInfo.getBaseRevision();
+        String packageName = fileLayoutInfo.getModule();
+        
+        return String.format("%s,%s,%s", packageType,packageName, packageVersion);
     }
 
 
-    private boolean inPackagesWhiteList(String packageName, String packageVersion){
-        this._logger.debug(String.format("inPackagesWhiteList, packageName: %s, packageVersion: %s", packageName, packageVersion));
+    private boolean inPackagesWhiteList(String packageManager, String packageName, String packageVersion) {
+        this._logger.debug(String.format("inPackagesWhiteList, packageManager: %s, packageName: %s, packageVersion: %s",
+                packageManager, packageName, packageVersion));
         List<PackageInfo> packagesInWhiteList = this._packageWhiteList
                 .stream()
-                .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
+                .filter(packageInfo -> packageInfo.getPackageManager().equalsIgnoreCase(packageManager) 
+                        && packageInfo.getPackageName().equalsIgnoreCase(packageName)
                         && (packageInfo.getPackageVersion().equalsIgnoreCase("*")
-                                || packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion))
+                        || packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion))
                 )
                 .collect(Collectors.toList());
 
         return !packagesInWhiteList.isEmpty();
     }
 
-    private boolean scoreBiggerThanOrEqualToBlackListScore(String packageName, String packageVersion, double score) {
+    private boolean scoreBiggerThanOrEqualToBlackListScore(String packageManager, String packageName, String packageVersion, double score) {
         List<PackageInfo> packagesList = this._packageBlackList
                 .stream()
-                .filter(packageInfo -> packageInfo.getPackageName().equalsIgnoreCase(packageName)
+                .filter(packageInfo -> packageInfo.getPackageManager().equalsIgnoreCase(packageManager) 
+                        && packageInfo.getPackageName().equalsIgnoreCase(packageName)
                         && (packageInfo.getPackageVersion().equalsIgnoreCase("*")
                         || packageInfo.getPackageVersion().equalsIgnoreCase(packageVersion))
                         && (score >= packageInfo.getCvssScore())

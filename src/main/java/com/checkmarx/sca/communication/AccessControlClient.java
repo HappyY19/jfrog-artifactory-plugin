@@ -66,7 +66,7 @@ public class AccessControlClient {
         return true;
     }
 
-    public AuthenticationHeader<String, String> GetAuthorizationHeader() {
+    public AuthenticationHeader GetAuthorizationHeader() {
         if (this._accessControlToken == null) {
             throw new UserIsNotAuthenticatedException();
         } else if (this._accessControlToken.isActive()) {
@@ -160,8 +160,8 @@ public class AccessControlClient {
         return this.Authenticate(this._accessControlCredentials);
     }
 
-    private AuthenticationHeader<String, String> GenerateTokenAuthorizationHeader() {
-        return new AuthenticationHeader<>("Authorization",
+    private AuthenticationHeader GenerateTokenAuthorizationHeader() {
+        return new AuthenticationHeader("Authorization",
                 String.format("Bearer %s", this._accessControlToken.getAccessToken()));
     }
 }

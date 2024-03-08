@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName;
 public class ArtifactInfo {
     @SerializedName("packageId")
     private String _packageId;
-    @SerializedName("id")
+    @SerializedName("legacyPackageId")
     private String _legacyPackageId;
     @SerializedName("name")
     private String _name;
@@ -15,15 +15,12 @@ public class ArtifactInfo {
     private String _type;
     @SerializedName("releaseDate")
     private String _releaseDate;
-    @SerializedName("summary")
+    @SerializedName("description")
     private String _description;
     @SerializedName("projectUrl")
     private String _projectUrl;
-    @SerializedName("homePage")
+    @SerializedName("projectHomePage")
     private String _projectHomePage;
-
-    public ArtifactInfo() {
-    }
 
     public String getId() {
         return this._legacyPackageId;

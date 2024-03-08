@@ -11,11 +11,7 @@ import org.slf4j.Logger;
 public final class ConfigurationReader {
     private static final String CONFIGURATIONS_FILE = "cxsca-security-plugin.properties";
 
-    public ConfigurationReader() {
-    }
-
-    public static PluginConfiguration loadConfiguration(@Nonnull File pluginsDirectory, @Nonnull Logger logger)
-            throws IOException {
+    public static PluginConfiguration loadConfiguration(@Nonnull File pluginsDirectory, @Nonnull Logger logger) throws IOException {
         if (!pluginsDirectory.exists()) {
             throw new IOException(String.format("Directory '%s' not found", pluginsDirectory.getAbsolutePath()));
         } else {

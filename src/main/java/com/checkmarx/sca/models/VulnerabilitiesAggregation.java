@@ -16,9 +16,6 @@ public class VulnerabilitiesAggregation {
     @SerializedName("lowRiskCount")
     private int _lowRiskCount;
 
-    public VulnerabilitiesAggregation() {
-    }
-
     public int getVulnerabilitiesCount() {
         return this._vulnerabilitiesCount;
     }

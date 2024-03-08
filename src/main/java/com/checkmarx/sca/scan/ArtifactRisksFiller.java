@@ -15,13 +15,22 @@ import com.checkmarx.sca.models.VulnerabilitiesAggregation;
 import com.google.inject.Inject;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Collectors;
+import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nonnull;
 
 import org.artifactory.fs.FileLayoutInfo;
 import org.artifactory.md.Properties;
-import org.artifactory.repo.*;
+import org.artifactory.repo.RepoPath;
+import org.artifactory.repo.Repositories;
+import org.artifactory.repo.RepositoryConfiguration;
+import org.artifactory.repo.VirtualRepositoryConfiguration;
+import org.artifactory.repo.RepoPathFactory;
 import org.slf4j.Logger;
 
 public class ArtifactRisksFiller {
@@ -39,9 +48,9 @@ public class ArtifactRisksFiller {
         this._repositories = repositories;
     }
 
-    public void scanArtifactsConcurrently(@Nonnull List<RepoPath> repoPaths,  boolean forceScan) {
+    public void scanArtifactsConcurrently(@Nonnull List<RepoPath> repoPaths, boolean forceScan) {
         this._logger.debug("scanArtifactsConcurrently start");
-        Map<RepoPath, ArtifactId>  repoPathArtifactIdMap = getArtifactsNeedToBeScanned(repoPaths, forceScan);
+        Map<RepoPath, ArtifactId> repoPathArtifactIdMap = getArtifactsNeedToBeScanned(repoPaths, forceScan);
         this._logger.debug("Finish collect artifacts");
         Map<RepoPath, ArtifactInfo> repoPathArtifactInfoMap = this
                 ._scaHttpClient
@@ -49,9 +58,9 @@ public class ArtifactRisksFiller {
         Map<RepoPath, ArtifactId> newRepoPathArtifactIdMap = repoPathArtifactInfoMap.entrySet()
                 .stream()
                 .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> {
-                            ArtifactInfo artifactInfo = e.getValue();
+                                Map.Entry::getKey,
+                                e -> {
+                                    ArtifactInfo artifactInfo = e.getValue();
                                     return new ArtifactId(
                                             artifactInfo.getPackageType(),
                                             artifactInfo.getName(),
@@ -71,28 +80,40 @@ public class ArtifactRisksFiller {
         });
         this._logger.debug("scanArtifactsConcurrently end");
     }
+
     public Map<RepoPath, ArtifactId> getArtifactsNeedToBeScanned(@Nonnull List<RepoPath> repoPaths, boolean forceScan) {
 
-        return repoPaths.stream()
+        Map<RepoPath, ArtifactId> map = repoPaths.stream()
                 .filter(repoPath -> {
-                    ArrayList<RepoPath> nonVirtualRepoPaths= this.getNonVirtualRepoPaths(repoPath);
+                    ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
                     return !nonVirtualRepoPaths.isEmpty();
                 })
                 .filter(repoPath -> {
-                    ArrayList<RepoPath> nonVirtualRepoPaths= this.getNonVirtualRepoPaths(repoPath);
+                    ArrayList<RepoPath> nonVirtualRepoPaths = this.getNonVirtualRepoPaths(repoPath);
                     return forceScan || !this.scanIsNotNeeded(nonVirtualRepoPaths);
                 })
                 .collect(Collectors.toMap(
-                   repoPath -> repoPath,
-                   repoPath -> {
-                       String repositoryKey = repoPath.getRepoKey();
-                       RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
-                       String packageType = repoConfiguration.getPackageType();
-                       PackageManager packageManager = PackageManager.GetPackageType(packageType);
-                       FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
-                       return this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
-                   }
+                        repoPath -> repoPath,
+                        repoPath -> {
+                            String repositoryKey = repoPath.getRepoKey();
+                            RepositoryConfiguration repoConfiguration = this._repositories.getRepositoryConfiguration(repositoryKey);
+                            String packageType = repoConfiguration.getPackageType();
+                            PackageManager packageManager = PackageManager.GetPackageType(packageType);
+                            FileLayoutInfo fileLayoutInfo = this._repositories.getLayoutInfo(repoPath);
+                            return this._artifactIdBuilder.getArtifactId(fileLayoutInfo, repoPath, packageManager);
+                        }
                 ));
+
+        return map.entrySet()
+                .stream()
+                .filter(item -> {
+                    ArtifactId artifactId = item.getValue();
+                    return artifactId.PackageType != null
+                            && artifactId.Name != null
+                            && artifactId.Version != null;
+                        }
+                )
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public boolean addArtifactRisks(@Nonnull RepoPath repoPath, @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths,
@@ -127,7 +148,7 @@ public class ArtifactRisksFiller {
                         artifactId.Version));
                 if (artifactId.isInvalid()) {
                     this._logger.error(String.format("The artifact id was not built correctly. " +
-                            "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType, artifactId.Name,
+                                    "PackageType: %s, Name: %s, Version: %s", artifactId.PackageType, artifactId.Name,
                             artifactId.Version));
                     return false;
                 }
@@ -166,7 +187,7 @@ public class ArtifactRisksFiller {
                 (value) -> {
                     this.logThresholdViolationByCvssScore((RepoPath) nonVirtualRepoPaths.get(0), artifactId, value);
                 },
-                ()-> {
+                () -> {
                     this.logThresholdViolationBySeverity((RepoPath) nonVirtualRepoPaths.get(0), artifactId);
                 }
         );
@@ -179,11 +200,11 @@ public class ArtifactRisksFiller {
         Set<Map.Entry<String, String>> properties = this._repositories.getProperties(repoPath).entries();
         for (Map.Entry<String, String> stringStringEntry : properties) {
             Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
-            this._logger.debug(String.format("Key: %s, value: %s", (String) property.getKey(), (String) property.getValue() ));
+            this._logger.debug(String.format("Key: %s, value: %s", (String) property.getKey(), (String) property.getValue()));
         }
-        String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS);
-        String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS);
-        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS);
+        String vulnerabilities = this._repositories.getProperty(repoPath, PropertiesConstants.TOTAL_RISKS_COUNT);
+        String mediumRisk = this._repositories.getProperty(repoPath, PropertiesConstants.MEDIUM_RISKS_COUNT);
+        String highRisk = this._repositories.getProperty(repoPath, PropertiesConstants.HIGH_RISKS_COUNT);
         SecurityRiskThreshold securityRiskThreshold = this._configuration.getSecurityRiskThreshold();
         this._logger.debug(String.format("repo path: %s", repoPath.toPath()));
         this._logger.debug(String.format("number of entries: %s", properties.size()));
@@ -268,7 +289,7 @@ public class ArtifactRisksFiller {
             } else {
                 Properties properties = this._repositories.getProperties(repoPath);
                 if (properties != null && this.allPropertiesDefined(properties)) {
-                    String scanDate = properties.getFirst(PropertiesConstants.LAST_SCANNED);
+                    String scanDate = properties.getFirst(PropertiesConstants.LAST_SCAN);
                     if (scanDate != null && !(scanDate.trim().isEmpty())) {
                         Instant instantDate = Instant.parse(scanDate);
                         instantDate = instantDate.plusSeconds((long) expirationTime);
@@ -290,13 +311,13 @@ public class ArtifactRisksFiller {
     }
 
     private boolean allPropertiesDefined(Properties properties) {
-        return properties.containsKey(PropertiesConstants.TOTAL_RISKS)
-                && properties.containsKey(PropertiesConstants.LOW_SEVERITY_RISKS)
-                && properties.containsKey(PropertiesConstants.MEDIUM_SEVERITY_RISKS)
-                && properties.containsKey(PropertiesConstants.HIGH_SEVERITY_RISKS)
+        return properties.containsKey(PropertiesConstants.TOTAL_RISKS_COUNT)
+                && properties.containsKey(PropertiesConstants.LOW_RISKS_COUNT)
+                && properties.containsKey(PropertiesConstants.MEDIUM_RISKS_COUNT)
+                && properties.containsKey(PropertiesConstants.HIGH_RISKS_COUNT)
                 && properties.containsKey(PropertiesConstants.RISK_SCORE)
                 && properties.containsKey(PropertiesConstants.RISK_LEVEL)
-                && properties.containsKey(PropertiesConstants.LAST_SCANNED);
+                && properties.containsKey(PropertiesConstants.LAST_SCAN);
     }
 
     private int getExpirationTime() {
@@ -377,21 +398,21 @@ public class ArtifactRisksFiller {
             licenceTypes = List.of();
         }
 
-        this._repositories.setProperty(repoPath, PropertiesConstants.TOTAL_RISKS,
+        this._repositories.setProperty(repoPath, PropertiesConstants.TOTAL_RISKS_COUNT,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getVulnerabilitiesCount())});
-        this._repositories.setProperty(repoPath, PropertiesConstants.LOW_SEVERITY_RISKS,
+        this._repositories.setProperty(repoPath, PropertiesConstants.LOW_RISKS_COUNT,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getLowRiskCount())});
-        this._repositories.setProperty(repoPath, PropertiesConstants.MEDIUM_SEVERITY_RISKS,
+        this._repositories.setProperty(repoPath, PropertiesConstants.MEDIUM_RISKS_COUNT,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getMediumRiskCount())});
-        this._repositories.setProperty(repoPath, PropertiesConstants.HIGH_SEVERITY_RISKS,
+        this._repositories.setProperty(repoPath, PropertiesConstants.HIGH_RISKS_COUNT,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getHighRiskCount())});
         this._repositories.setProperty(repoPath, PropertiesConstants.RISK_SCORE,
                 new String[]{String.valueOf(vulnerabilitiesAggregation.getMaxRiskScore())});
         this._repositories.setProperty(repoPath, PropertiesConstants.RISK_LEVEL,
                 new String[]{vulnerabilitiesAggregation.getMaxRiskSeverity()});
-        this._repositories.setProperty(repoPath, PropertiesConstants.LAST_SCANNED,
+        this._repositories.setProperty(repoPath, PropertiesConstants.LAST_SCAN,
                 new String[]{Instant.now().toString()});
-        this._repositories.setProperty(repoPath, PropertiesConstants.LICENSES,
+        this._repositories.setProperty(repoPath, PropertiesConstants.LICENSE_NAMES,
                 new String[]{String.join(",", licenceTypes)});
     }
 

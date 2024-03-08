@@ -127,7 +127,7 @@ public class PluginConfiguration {
                 }).distinct();
             } catch (Exception var4) {
                 this.logger.error(String.format("Error converting '%s' configuration value, no license restrictions " +
-                        "applied. Exception Message: %s.", ConfigurationEntry.LICENSES_ALLOWED.propertyKey(),
+                                "applied. Exception Message: %s.", ConfigurationEntry.LICENSES_ALLOWED.propertyKey(),
                         var4.getMessage()));
                 throw var4;
             }
@@ -171,7 +171,7 @@ public class PluginConfiguration {
         return SecurityRiskThreshold.valueOf(configuration.trim().toUpperCase());
     }
 
-    public Optional<Double> getSecurityRiskThresholdCvssScore(){
+    public Optional<Double> getSecurityRiskThresholdCvssScore() {
         Optional<Double> value = Optional.empty();
         String cvssScore = this.getPropertyOrDefault(ConfigurationEntry.SECURITY_RISK_THRESHOLD_CVSS_SCORE);
         if (cvssScore != null) {

@@ -16,12 +16,7 @@ public class ArtifactId {
     }
 
     public boolean isInvalid() {
-        return this.Name == null
-                || this.Name.trim().isEmpty()
-                || this.Version == null
-                || this.Version.trim().isEmpty()
-                || this.PackageType == null
-                || this.PackageType.trim().isEmpty();
+        return this.Name == null || this.Name.trim().isEmpty() || this.Version == null || this.Version.trim().isEmpty() || this.PackageType == null || this.PackageType.trim().isEmpty();
     }
 
     public String getIdentifier() {

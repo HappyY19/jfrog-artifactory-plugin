@@ -20,12 +20,7 @@ public class ArtifactIdBuilder {
     @Inject
     private ComposerArtifactIdBuilder _composerArtifactIdBuilder;
 
-    public ArtifactIdBuilder() {
-    }
-
-    public ArtifactId getArtifactId(@Nonnull FileLayoutInfo fileLayoutInfo,
-                                    @Nonnull RepoPath repoPath,
-                                    @Nonnull PackageManager packageManager) {
+    public ArtifactId getArtifactId(@Nonnull FileLayoutInfo fileLayoutInfo, @Nonnull RepoPath repoPath, @Nonnull PackageManager packageManager) {
         String revision = fileLayoutInfo.getBaseRevision();
         String name = fileLayoutInfo.getModule();
         List<String> validFileLayouts = List.of(PackageManager.MAVEN.key(), PackageManager.GRADLE.key());
@@ -43,10 +38,7 @@ public class ArtifactIdBuilder {
         }
     }
 
-    private ArtifactId getArtifactIdOfValidLayout(FileLayoutInfo fileLayoutInfo,
-                                                  PackageManager packageManager,
-                                                  String name,
-                                                  String revision) {
+    private ArtifactId getArtifactIdOfValidLayout(FileLayoutInfo fileLayoutInfo, PackageManager packageManager, String name, String revision) {
         String organization = fileLayoutInfo.getOrganization();
         String fileIntegrationRevision = fileLayoutInfo.getFileIntegrationRevision();
         name = String.format("%s:%s", organization, name);
@@ -91,19 +83,14 @@ public class ArtifactIdBuilder {
                     regex = "(?<name>.*?)\\/@v\\/(?<version>.*)";
                     return this.parseRepoPath(path, packageManager, regex);
                 default:
-                    this._logger.debug(String.format("Trying to parse RepoPath through regex but packageType " +
-                            "is not supported. PackageType: %s, Artifact Name: %s",
-                            packageManager.packageType(),
-                            repoPath.getName()));
-                    this._logger.debug(String.format("Path not supported by regex. Artifact path: %s",
-                            repoPath.getPath()));
+                    this._logger.info(String.format("Trying to parse RepoPath through regex but packageType is not supported. PackageType: %s, Artifact Name: %s", packageManager.packageType(), repoPath.getName()));
+                    this._logger.debug(String.format("Path not supported by regex. Artifact path: %s", repoPath.getPath()));
                     return new ArtifactId(packageManager.packageType(), (String) null, (String) null);
             }
 
             return this.parseRepoPath(repoPath.getPath(), packageManager, regex);
         } catch (Exception var7) {
-            this._logger.error(String.format("There was a problem trying to use a Regex to parse " +
-                    "the artifact path. Artifact path: %s", repoPath.getPath()));
+            this._logger.error(String.format("There was a problem trying to use a Regex to parse the artifact path. Artifact path: %s", repoPath.getPath()));
             this._logger.debug("Exception", var7);
             return new ArtifactId(packageManager.packageType(), (String) null, (String) null);
         }
@@ -129,8 +116,7 @@ public class ArtifactIdBuilder {
             String packagePath = matcher.group("packagePath");
             String version = matcher.group("version");
             String[] packagePathArray = packagePath.split("/");
-            String organisation = String.join(".",
-                    (CharSequence[]) Arrays.copyOfRange(packagePathArray, 0, packagePathArray.length - 1));
+            String organisation = String.join(".", (CharSequence[]) Arrays.copyOfRange(packagePathArray, 0, packagePathArray.length - 1));
             String packageName = packagePathArray[packagePathArray.length - 1];
             String name = String.format("%s:%s", organisation, packageName);
             this.LogPackageDebug(repoPath.getPath(), packageManager, name, version);

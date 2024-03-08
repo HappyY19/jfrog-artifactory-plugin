@@ -1,0 +1,55 @@
+import com.checkmarx.sca.communication.ScaHttpClient;
+import com.checkmarx.sca.configuration.ConfigurationReader;
+import com.checkmarx.sca.configuration.PluginConfiguration;
+import com.checkmarx.sca.models.ArtifactId;
+import com.checkmarx.sca.models.ArtifactInfo;
+import com.checkmarx.sca.models.PackageAnalysisAggregation;
+import com.checkmarx.sca.models.PackageLicensesModel;
+import org.artifactory.repo.RepoPath;
+import org.artifactory.repo.RepoPathFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+public class Test {
+
+    public static void main(String[] args){
+        File pluginsDirectory = new File("/home/happy/Documents/software/application_security/checkmarx/tools/jfrog-artifactory-plugin");
+        Logger logger = LoggerFactory.getLogger(Test.class);
+        RepoPathFactory repoPathFactory = new RepoPathFactory();
+        RepoPath repoPath_1 = repoPathFactory.create("aa", "/1");
+        RepoPath repoPath_2 = repoPathFactory.create("bb", "/2");
+        RepoPath repoPath_3 = repoPathFactory.create("cc", "/3");
+        try {
+            logger.info("start");
+            PluginConfiguration configuration = ConfigurationReader.loadConfiguration(pluginsDirectory, logger);
+            logger.info("1");
+            ScaHttpClient client = new ScaHttpClient(configuration);
+            logger.info("2");
+//            ArtifactInfo artifactInfo = client.getArtifactInformation("python", "urllib3", "1.20");
+            logger.info("3");
+//            PackageAnalysisAggregation packageAnalysisAggregation = client.getRiskAggregationOfArtifact("Python", "urllib3", "1.20");
+//            PackageLicensesModel packageLicensesModel = client.getPackageLicenseOfArtifact("Python", "urllib3", "1.20");
+            Map<RepoPath, ArtifactId> artifactIds = Map.of(
+                    repoPath_1, new ArtifactId("Python", "urllib3", "1.19.1"),
+                    repoPath_2, new ArtifactId("Python", "urllib3", "1.20"),
+                    repoPath_3, new ArtifactId("Python", "urllib3", "1.21.1")
+            );
+            Map<RepoPath, ArtifactInfo> t = client.getArtifactInformationConcurrently(artifactIds);
+
+            Map<RepoPath, PackageAnalysisAggregation> s = client.getRiskAggregationConcurrently(artifactIds);
+            Map<RepoPath,PackageLicensesModel> u = client.getPackageLicenseConcurrently(artifactIds);
+
+            logger.info("finish");
+        } catch (Exception var11) {
+            logger.error("Sca plugin could not be initialized!");
+
+        }
+    }
+}

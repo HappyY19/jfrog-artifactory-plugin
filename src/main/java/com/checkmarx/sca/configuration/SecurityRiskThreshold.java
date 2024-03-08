@@ -5,7 +5,4 @@ public enum SecurityRiskThreshold {
     LOW,
     MEDIUM,
     HIGH;
-
-    private SecurityRiskThreshold() {
-    }
 }

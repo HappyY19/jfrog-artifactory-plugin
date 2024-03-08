@@ -43,32 +43,27 @@ public class ComposerArtifactIdBuilder {
     }
 
     public ArtifactId generateArtifactId(@Nonnull RepoPath repoPath, @Nonnull PackageManager packageManager) {
-        Pair<String, String> artifactInfo = this.parseRepoPath(repoPath);
+        Pair artifactInfo = this.parseRepoPath(repoPath);
         if (artifactInfo.getFirst() == null) {
             return new ArtifactId(packageManager.packageType(), (String) null, (String) null);
         } else {
             try {
-                ArtifactId artifactId = this.requestPackageInfoFromPackagist(packageManager,
-                        (String) artifactInfo.getFirst(),
-                        (String) artifactInfo.getSecond());
+                ArtifactId artifactId = this.requestPackageInfoFromPackagist(packageManager, (String) artifactInfo.getFirst(), (String) artifactInfo.getSecond());
                 if (artifactId != null) {
                     return artifactId;
                 }
 
                 String newName = this._composerFallback.applyFallback((String) artifactInfo.getFirst());
                 if (newName != null) {
-                    artifactId = this.requestPackageInfoFromPackagist(packageManager, newName,
-                            (String) artifactInfo.getSecond());
+                    artifactId = this.requestPackageInfoFromPackagist(packageManager, newName, (String) artifactInfo.getSecond());
                     if (artifactId != null) {
                         return artifactId;
                     }
                 }
 
-                this._logger.warn(String.format("Unable to get artifact version from Composer. Artifact path: %s",
-                        repoPath.getPath()));
+                this._logger.warn(String.format("Unable to get artifact version from Composer. Artifact path: %s", repoPath.getPath()));
             } catch (Exception var6) {
-                this._logger.error(String.format("There was a problem trying to get the artifact version " +
-                        "from Composer. Artifact path: %s", repoPath.getPath()));
+                this._logger.error(String.format("There was a problem trying to get the artifact version from Composer. Artifact path: %s", repoPath.getPath()));
                 this._logger.debug("Exception", var6);
             }
 
@@ -76,13 +71,12 @@ public class ComposerArtifactIdBuilder {
         }
     }
 
-    private Pair<String, String> parseRepoPath(@Nonnull RepoPath repoPath) {
+    private Pair parseRepoPath(@Nonnull RepoPath repoPath) {
         String regex = "(?<name>.+)/commits/(?<version>.+)/.+";
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(repoPath.getPath());
         if (!matcher.matches()) {
-            this._logger.error(String.format("Unable to parse RepoPath from Composer. Artifact path: %s",
-                    repoPath.getPath()));
+            this._logger.error(String.format("Unable to parse RepoPath from Composer. Artifact path: %s", repoPath.getPath()));
             return new Pair((Object) null, (Object) null);
         } else {
             String artifactName = matcher.group("name");
@@ -90,25 +84,16 @@ public class ComposerArtifactIdBuilder {
             if (artifactName != null && artifactVersion != null) {
                 return new Pair(artifactName, artifactVersion);
             } else {
-                this._logger.error(String.format("Unable to parse RepoPath from Composer. Artifact path: %s",
-                        repoPath.getPath()));
+                this._logger.error(String.format("Unable to parse RepoPath from Composer. Artifact path: %s", repoPath.getPath()));
                 return new Pair((Object) null, (Object) null);
             }
         }
     }
 
-    private ArtifactId requestPackageInfoFromPackagist(
-            @Nonnull PackageManager packageManager,
-            @Nonnull String packageName,
-            @Nonnull String commitReference)
-            throws ExecutionException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(
-                URI.create(String.format("%s/p2/%s.json", this._baseUrl, packageName)))
-                .GET()
-                .build();
-        CompletableFuture<HttpResponse<String>> responseFuture = this._httpClient
-                .sendAsync(request, BodyHandlers.ofString());
-        HttpResponse<String> response = (HttpResponse) responseFuture.get();
+    private ArtifactId requestPackageInfoFromPackagist(@Nonnull PackageManager packageManager, @Nonnull String packageName, @Nonnull String commitReference) throws ExecutionException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(String.format("%s/p2/%s.json", this._baseUrl, packageName))).GET().build();
+        CompletableFuture responseFuture = this._httpClient.sendAsync(request, BodyHandlers.ofString());
+        HttpResponse response = (HttpResponse) responseFuture.get();
         if (response.statusCode() == 200) {
             JsonElement jElement = JsonParser.parseString((String) response.body());
             JsonObject jObject = jElement.getAsJsonObject();

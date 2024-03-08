@@ -1,6 +1,5 @@
 package com.checkmarx.sca.scan;
 
-import com.checkmarx.sca.PropertiesConstants;
 import com.checkmarx.sca.configuration.ConfigurationEntry;
 import com.checkmarx.sca.configuration.PluginConfiguration;
 import com.google.inject.Inject;
@@ -33,9 +32,7 @@ public class LicenseAllowanceChecker {
         this._repositories = repositories;
     }
 
-    public void checkLicenseAllowance(@Nonnull RepoPath repoPath,
-                                      @Nonnull ArrayList<RepoPath> nonVirtualRepoPaths)
-            throws CancelException {
+    public void checkLicenseAllowance(@Nonnull RepoPath repoPath, @Nonnull ArrayList nonVirtualRepoPaths) throws CancelException {
         if (nonVirtualRepoPaths.size() > 1) {
             this._logger.warn(String.format("More than one RepoPath found for the artifact: %s.", repoPath.getName()));
         }
@@ -53,18 +50,17 @@ public class LicenseAllowanceChecker {
             ignoreThreshold = this.getIgnoreProperty(path);
         } while (!"true".equalsIgnoreCase(ignoreThreshold));
 
-        this._logger.warn(String.format("Ignoring the License allowance. " +
-                "Artifact Property \"%s\" is \"true\". Artifact Name: %s", PropertiesConstants.IGNORE_LICENSES,
-                repoPath.getName()));
+        this._logger.warn(String.format("Ignoring the License allowance. Artifact Property \"%s\" is \"true\". Artifact Name: %s", "CxSCA.IgnoreLicenses", repoPath.getName()));
     }
 
     private String getIgnoreProperty(RepoPath path) {
         String ignoreLicense = "false";
-        Set<Map.Entry<String, String>> properties = this._repositories.getProperties(path).entries();
+        Set properties = this._repositories.getProperties(path).entries();
+        Iterator var4 = properties.iterator();
 
-        for (Map.Entry<String, String> stringStringEntry : properties) {
-            Map.Entry<String, String> property = (Map.Entry) stringStringEntry;
-            if (PropertiesConstants.IGNORE_LICENSES.equalsIgnoreCase((String) property.getKey())) {
+        while (var4.hasNext()) {
+            Map.Entry property = (Map.Entry) var4.next();
+            if ("CxSCA.IgnoreLicenses".equalsIgnoreCase((String) property.getKey())) {
                 ignoreLicense = (String) property.getValue();
                 break;
             }
@@ -74,17 +70,13 @@ public class LicenseAllowanceChecker {
     }
 
     private void validateLicenseAllowanceFulfillment(RepoPath repoPath) throws CancelException {
-        Set<String> licenseAllowanceList = this.getLicenseAllowanceList();
-        this._logger.debug(String.format("License allowance configured: [%s]",
-                String.join(", ", licenseAllowanceList)));
-        if (!licenseAllowanceList.isEmpty()) {
-            if (licenseAllowanceList.size() == 1
-                    && licenseAllowanceList.toArray()[0].toString().equalsIgnoreCase("none")) {
+        Set licenseAllowanceList = this.getLicenseAllowanceList();
+        this._logger.debug(String.format("License allowance configured: [%s]", String.join(", ", licenseAllowanceList)));
+        if (licenseAllowanceList.size() != 0) {
+            if (licenseAllowanceList.size() == 1 && licenseAllowanceList.toArray()[0].toString().equalsIgnoreCase("none")) {
                 throw new CancelException(this.getCancelExceptionMessage(repoPath), 403);
             } else {
-                List<String> licenses = List.of(
-                        this._repositories.getProperty(repoPath, PropertiesConstants.LICENSES).split(",")
-                );
+                List licenses = List.of(this._repositories.getProperty(repoPath, "CxSCA.Licenses").split(","));
                 Stream var10000 = licenseAllowanceList.stream();
                 Objects.requireNonNull(licenses);
                 if (var10000.noneMatch(licenses::contains)) {
@@ -94,7 +86,7 @@ public class LicenseAllowanceChecker {
         }
     }
 
-    private Set<String> getLicenseAllowanceList() {
+    private Set getLicenseAllowanceList() {
         String allowance = this._configuration.getPropertyOrDefault(ConfigurationEntry.LICENSES_ALLOWED);
         if (allowance != null) {
             try {
